@@ -12,8 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "emulators": "firebase emulators:start --only firestore,auth",
-    "deploy:dev": "firebase use dev && firebase deploy --only hosting,firestore:rules",
-    "deploy:prod": "firebase use prod && firebase deploy --only hosting,firestore:rules"
+    "deploy": "firebase deploy --only hosting,firestore:rules"
   },
   "dependencies": {
     "firebase": "^12.9.0",
