@@ -13,6 +13,7 @@ export default function App() {
 
   useEffect(() => {
     if (user) {
+      // TODO(p1): remove — needed for P0 acceptance only
       console.log('Anonymous UID:', user.uid)
     }
   }, [user])
