@@ -20,8 +20,7 @@ _(empty)_
 
 ## Phase 5 — Make it polished
 
-- Re-verify the Firebase emulator suite boots and write security-rules tests against it (suite was installed in P0 but blocked locally on JDK version; now requires JDK 21+).
-- Audit the 6 npm vulnerabilities reported during P0 install (5 moderate, 1 critical — likely transitive in dev deps; revisit with `npm audit` and triage).
+- Write Firestore security-rules tests against the emulator suite (the deny-by-default baseline lands in P0; per-document rules + emulator-backed tests land here).
 
 ## Beyond launch
 
