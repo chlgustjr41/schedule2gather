@@ -213,7 +213,7 @@ All written in TypeScript, deployed via `firebase deploy --only functions`.
 - **Firebase Hosting** for the SPA. Single-page rewrite to `/index.html`. Long cache for hashed assets, no-cache for `index.html`.
 - **Preview channels** for PR builds (`firebase hosting:channel:deploy pr-123`).
 - **CI**: GitHub Actions. On push to `main`: lint → typecheck → test → build → deploy.
-- **Environments**: `dev` and `prod` Firebase projects, separated by `.firebaserc` aliases.
+- **Environments**: single `schedule2gather` Firebase project (decided during P0 implementation; the spec originally called for separated dev/prod projects but the cost/complexity wasn't justified for a solo-launch app). If real prod data growth or a need to test destructive migrations emerges later, splitting into two projects is straightforward — just add a second alias to `.firebaserc` and update CI.
 
 ---
 
@@ -255,7 +255,7 @@ Total target: **~5 weeks solo** to reach the Phase 5 / "polished launch" bar.
 
 **In scope:**
 - Lift the Vite + React 18 + TypeScript + Tailwind + ESLint scaffold from `D:\web-project\survey-builder\` as a starting template (swap RTDB calls for Firestore — different SDK methods, different rules dialect).
-- Provision two Firebase projects (`schedule2gather-dev`, `schedule2gather-prod`); wire up `.firebaserc` aliases.
+- Provision a single `schedule2gather` Firebase project; `.firebaserc` has one `default` alias. (Originally planned as dev + prod; collapsed during P0 — see §9.)
 - Initialize Firestore, Auth (anonymous), Functions, Hosting.
 - Install Zustand and shadcn/ui base; configure `@/*` path alias.
 - Folder structure: `src/lib`, `src/stores`, `src/services`, `src/pages`, `src/components`.
