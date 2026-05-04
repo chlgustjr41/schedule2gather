@@ -1,10 +1,12 @@
 import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import LandingPage from '@/pages/LandingPage'
+import EventPage from '@/pages/EventPage'
 
 export default function App() {
   const init = useAuthStore((s) => s.init)
   const user = useAuthStore((s) => s.user)
-  const loading = useAuthStore((s) => s.loading)
 
   useEffect(() => {
     const unsub = init()
@@ -19,14 +21,12 @@ export default function App() {
   }, [user])
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold">schedule2gather</h1>
-        <p className="mt-2 text-gray-500">Phase 0 — Foundation</p>
-        <p className="mt-4 text-sm">
-          {loading ? 'Signing in…' : user ? `Signed in: ${user.uid.slice(0, 8)}…` : 'Not signed in'}
-        </p>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/e/:slug" element={<EventPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
