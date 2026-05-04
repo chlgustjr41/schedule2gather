@@ -66,3 +66,18 @@ jobs:
         run: |
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SCHEDULE2GATHER }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx firebase-tools@latest deploy --only functions --project schedule2gather --non-interactive
+
+      # gen-2 callables sometimes lose the public invoker binding on redeploy via service account.
+      # Idempotently re-grant `allUsers: run.invoker` so the function stays publicly callable.
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SCHEDULE2GATHER }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Ensure Cloud Run public invoker on createEvent
+        run: |
+          gcloud run services add-iam-policy-binding createevent \
+            --region=us-central1 \
+            --project=schedule2gather \
+            --member=allUsers \
+            --role=roles/run.invoker
