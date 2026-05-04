@@ -1,10 +1,22 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Phase 0 baseline: any authenticated user can read/write.
-    // P5 will replace this with strict per-document rules + emulator tests.
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if false;
+      allow update, delete: if request.auth.uid == resource.data.ownerUid;
+
+      match /participants/{participantId} {
+        allow read: if true;
+        allow create: if request.auth != null
+                      && request.resource.data.uid == request.auth.uid
+                      && request.resource.data.name is string
+                      && request.resource.data.name.size() > 0
+                      && request.resource.data.name.size() < 80;
+        allow update: if request.auth.uid == resource.data.uid;
+        allow delete: if request.auth.uid == resource.data.uid;
+      }
     }
   }
 }
