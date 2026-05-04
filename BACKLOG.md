@@ -8,7 +8,7 @@ Out-of-scope items captured during phase work. Each phase reviews this at start 
 
 ## Phase 2 — Real users, real zones
 
-_(empty)_
+- Refactor `slotCount` computation duplicated between `functions/src/lib/validate.ts` and `functions/src/index.ts` — either return computed values from `validateCreateEventInput` or move the cap check into the handler with shared variables. P1 review flagged latent divergence risk.
 
 ## Phase 3 — Make it usable
 
@@ -21,6 +21,8 @@ _(empty)_
 ## Phase 5 — Make it polished
 
 - Write Firestore security-rules tests against the emulator suite (the deny-by-default baseline lands in P0; per-document rules + emulator-backed tests land here).
+- Bump Cloud Functions Node runtime from 20 to 22 (Node 20 is decommissioned 2026-10-30).
+- Bump `firebase-functions` to latest (currently `^6.1.0`; warning on every deploy).
 
 ## Beyond launch
 
