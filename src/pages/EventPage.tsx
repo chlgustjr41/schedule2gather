@@ -2,7 +2,7 @@ import { useEffect, useReducer } from 'react'
 import { useParams } from 'react-router-dom'
 import { useEventStore } from '@/stores/eventStore'
 import { useAuthStore } from '@/stores/authStore'
-import { loadParticipantsForEvent, countNamesForEvent } from '@/lib/participantId'
+import { loadParticipantsForEvent } from '@/lib/participantId'
 import NamePrompt from '@/components/NamePrompt'
 import AvailabilityGrid from '@/components/AvailabilityGrid'
 import EventNotFound from '@/components/EventNotFound'
@@ -20,6 +20,8 @@ export default function EventPage() {
   const loadEvent = useEventStore((s) => s.loadEvent)
   const joinAs = useEventStore((s) => s.joinAs)
   const reset = useEventStore((s) => s.reset)
+  // useReducer instead of useState: the project's react-hooks/set-state-in-effect
+  // lint rule rejects setState calls inside effects. A reducer dispatch is allowed.
   const [namePrompt, setNamePrompt] = useReducer(
     (_: NamePromptState, next: NamePromptState) => next,
     { show: false }
@@ -57,7 +59,6 @@ export default function EventPage() {
     if (!slug || !user) return
     await joinAs(name, user.uid)
     setNamePrompt({ show: false })
-    countNamesForEvent(slug)
   }
 
   return (

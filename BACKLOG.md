@@ -9,6 +9,8 @@ Out-of-scope items captured during phase work. Each phase reviews this at start 
 ## Phase 2 — Real users, real zones
 
 - Refactor `slotCount` computation duplicated between `functions/src/lib/validate.ts` and `functions/src/index.ts` — either return computed values from `validateCreateEventInput` or move the cap check into the handler with shared variables. P1 review flagged latent divergence risk.
+- `EventPage` auto-join uses the lowercased localStorage key as the participant's display name. P2 should preserve the user's original-cased name (store it in localStorage alongside the UUID, or look it up from the existing Firestore participant doc).
+- `EventPage` `handleJoin` swallows `joinAs` errors silently (network failure, rule rejection). Add user-visible error feedback (toast or inline error in NamePrompt).
 
 ## Phase 3 — Make it usable
 
