@@ -27,10 +27,22 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
+      - name: Test (root)
         run: npm test
 
-      - name: Build
+      - name: Install functions deps
+        working-directory: functions
+        run: npm ci
+
+      - name: Test (functions)
+        working-directory: functions
+        run: npm test
+
+      - name: Build (functions)
+        working-directory: functions
+        run: npm run build
+
+      - name: Build (root)
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -47,3 +59,10 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SCHEDULE2GATHER }}
           channelId: live
           projectId: schedule2gather
+
+      - name: Deploy Functions
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SCHEDULE2GATHER }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
+          npx firebase-tools@latest deploy --only functions --project schedule2gather --non-interactive
