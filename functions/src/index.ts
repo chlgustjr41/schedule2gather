@@ -64,3 +64,5 @@ export const createEvent = onCall(
     return { slug }
   },
 )
+
+export { cleanupExpiredEvents } from './cleanupExpiredEvents'
