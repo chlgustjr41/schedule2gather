@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   setDoc,
   serverTimestamp,
@@ -33,7 +34,11 @@ export function subscribeToParticipants(
 
 /**
  * Resolve or create the local participant for this (event, name).
- * Creates the Firestore doc if absent.
+ *
+ * If the participant doc already exists, only `name`, `uid`, and `lastUpdated` are
+ * updated; `availability` is preserved. (Including `availability` in a `merge:true`
+ * setDoc would still overwrite the existing field — `merge` only protects fields
+ * absent from the write payload.)
  */
 export async function getOrCreateParticipant(
   slug: string,
@@ -42,21 +47,38 @@ export async function getOrCreateParticipant(
 ): Promise<ParticipantDoc> {
   const participantId = getOrCreateParticipantId(slug, name)
   const ref = doc(db, 'events', slug, 'participants', participantId)
-  const initial: Omit<ParticipantDoc, 'lastUpdated'> = {
+  const trimmedName = name.trim()
+
+  const snap = await getDoc(ref)
+
+  if (snap.exists()) {
+    const existing = snap.data() as ParticipantDoc
+    await setDoc(
+      ref,
+      { name: trimmedName, uid, lastUpdated: serverTimestamp() },
+      { merge: true },
+    )
+    return {
+      participantId,
+      name: trimmedName,
+      uid,
+      availability: existing.availability ?? '',
+      lastUpdated: existing.lastUpdated ?? { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 },
+    }
+  }
+
+  await setDoc(ref, {
     participantId,
-    name: name.trim(),
+    name: trimmedName,
     uid,
     availability: '',
-  }
-  // Use merge:true so re-creating a participant by the same name doesn't blow away an existing bitmap.
-  await setDoc(
-    ref,
-    { ...initial, lastUpdated: serverTimestamp() },
-    { merge: true },
-  )
-  // Round-trip: build optimistic doc to return immediately. The real one arrives via subscribeToParticipants.
+    lastUpdated: serverTimestamp(),
+  })
   return {
-    ...initial,
+    participantId,
+    name: trimmedName,
+    uid,
+    availability: '',
     lastUpdated: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 },
   }
 }
