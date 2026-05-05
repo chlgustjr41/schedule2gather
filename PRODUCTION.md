@@ -289,20 +289,24 @@ Total target: **~5 weeks solo** to reach the Phase 5 / "polished launch" bar.
 
 **Late-P1 refinement note:** The days-of-week event modes (`weekdays_recurring` and `weekdays_in_range`) were dropped from the client during P1 to keep the create-event experience simple and fast. The "spontaneous quick scheduling" use case doesn't need recurring-meeting patterns; those belong more to calendar tools. The Cloud Function still validates all three modes, so re-adding them later is trivial. Days-of-week mode moved to "Beyond launch" in BACKLOG.md. The form was also improved with a dual-month calendar, quick "select all month" buttons, a curated timezone dropdown with auto-detect, and a ShareLinkBanner on the event page.
 
-### Phase 2 — Real users, real zones (~1 week)
+### Phase 2 — Real users, real zones (~1 week) ✅ COMPLETE 2026-05-05
 
 **Goal:** Per-participant TZ rendering and host upgrade-to-Google.
 
 **In scope:**
-- Canonical UTC slot-index data model; `date-fns-tz` for conversions at the render/write boundary.
-- Viewer's grid renders in their TZ; writes round-trip correctly across zones.
-- DST-boundary unit tests (spring forward, fall back, southern hemisphere).
-- Host can `linkWithPopup` (Google) from the event view; UID is preserved so existing event ownership survives the upgrade.
-- "Sign in" button surfaced only on host's view.
+- ✅ Display-layer TZ conversion via `date-fns-tz`. Bitmap stays event-TZ-indexed (no data migration). Viewer's grid renders date and time labels in their own TZ.
+- ✅ Viewer can override their TZ via a curated `<TimezonePicker>` in the event header.
+- ✅ DST-boundary unit tests (spring forward, fall back, southern hemisphere).
+- ✅ Host can `linkWithPopup` (Google) from the event view; UID preserved so existing event ownership survives the upgrade. Fallback to `signInWithPopup` if the Google account is already in use elsewhere.
+- ✅ Host-only "Sign in with Google" button + sign-out.
+- ✅ `event.ownerEmail` written when host signs in (enables future cross-device ownership UI).
+- ✅ BACKLOG fixes consolidated: slotCount duplication refactored, original-cased name preserved on auto-rejoin, joinAs errors surfaced inline.
 
 **Out of scope:** Mobile/touch, undo/redo, ranking, export, 3-state, PWA, a11y polish.
 
 **Done when:** Host in TZ-A, participant in TZ-B — painting in B's local hours yields an aggregate that A sees correctly. Host signs in with Google → still owns event; switching devices works.
+
+**P2 implementation note:** The original spec called for a "canonical UTC slot index" data model. We chose a simpler design — keep the bitmap indexed by event-TZ slot position (P1's representation) and convert to viewer TZ at the *display* boundary only. This avoids a data migration, security-rule churn, and the special-case for `weekdays_recurring` mode. Functionally equivalent.
 
 ### Phase 3 — Make it usable (~1 week)
 
