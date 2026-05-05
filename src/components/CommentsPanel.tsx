@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format } from 'date-fns'
 import {
   subscribeToComments,
   addComment,
@@ -21,6 +21,15 @@ function formatRelative(seconds: number | undefined): string {
   if (!seconds) return 'just now'
   try {
     return formatDistanceToNow(new Date(seconds * 1000), { addSuffix: true })
+  } catch {
+    return ''
+  }
+}
+
+function formatExactTime(seconds: number | undefined): string {
+  if (!seconds) return ''
+  try {
+    return format(new Date(seconds * 1000), 'MMM d, HH:mm')
   } catch {
     return ''
   }
@@ -106,8 +115,14 @@ export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid }
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="text-sm font-medium">{c.authorName}</div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">
+                    <span
+                      className="text-xs text-gray-400 whitespace-nowrap"
+                      title={formatExactTime(c.createdAt?.seconds)}
+                    >
                       {formatRelative(c.createdAt?.seconds)}
+                      {c.createdAt?.seconds && (
+                        <span className="text-gray-300"> · {formatExactTime(c.createdAt.seconds)}</span>
+                      )}
                     </span>
                     {canDelete && (
                       <button

@@ -21,14 +21,14 @@ export interface CommentDoc {
 }
 
 /**
- * Subscribe to all comments on an event, ordered chronologically (oldest first).
+ * Subscribe to all comments on an event, ordered newest first.
  */
 export function subscribeToComments(
   slug: string,
   cb: (comments: CommentDoc[]) => void,
 ): Unsubscribe {
   const ref = collection(db, 'events', slug, 'comments')
-  const q = query(ref, orderBy('createdAt', 'asc'))
+  const q = query(ref, orderBy('createdAt', 'desc'))
   return onSnapshot(q, (snap) => {
     const list: CommentDoc[] = snap.docs.map((d) => {
       const data = d.data() as Omit<CommentDoc, 'id'>
