@@ -88,6 +88,18 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     await updateMyAvailability(pack(next))
   }
 
+  const setAllAvailable = async () => {
+    if (!event || !myCommittedBits) return
+    const next = new Array(event.slotCount).fill(true)
+    await updateMyAvailability(pack(next))
+  }
+
+  const setAllUnavailable = async () => {
+    if (!event || !myCommittedBits) return
+    const next = new Array(event.slotCount).fill(false)
+    await updateMyAvailability(pack(next))
+  }
+
   const handlePointerDown = (slotIdx: number) => (e: React.PointerEvent) => {
     e.preventDefault()
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
@@ -106,6 +118,19 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     if (!draftBits) setTooltipSlot(null)
   }
 
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!draftBits) return
+    const elem = document.elementFromPoint(e.clientX, e.clientY)
+    if (!elem) return
+    const cellEl = elem.closest('td[data-slot-idx]') as HTMLElement | null
+    if (!cellEl) return
+    const slotIdxStr = cellEl.dataset.slotIdx
+    if (!slotIdxStr) return
+    const slotIdx = Number(slotIdxStr)
+    if (Number.isNaN(slotIdx)) return
+    dragTo(slotIdx, myCommittedBits)
+  }
+
   const handlePointerUp = async () => {
     const finalBits = commitPaint()
     if (finalBits) {
@@ -114,9 +139,27 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   }
 
   return (
-    <div className="overflow-auto p-4 flex justify-center">
+    <div className="p-4">
+      <div className="flex justify-center gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => void setAllAvailable()}
+          className="text-sm border border-indigo-300 text-indigo-700 hover:bg-indigo-50 rounded px-3 py-1"
+        >
+          Mark all available
+        </button>
+        <button
+          type="button"
+          onClick={() => void setAllUnavailable()}
+          className="text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 rounded px-3 py-1"
+        >
+          Clear all
+        </button>
+      </div>
+      <div className="overflow-auto flex justify-center">
       <table
         className="border-collapse select-none mx-auto"
+        onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
@@ -157,6 +200,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
                 return (
                   <td
                     key={slotIdx}
+                    data-slot-idx={slotIdx}
                     onPointerDown={handlePointerDown(slotIdx)}
                     onPointerEnter={handlePointerEnter(slotIdx)}
                     onPointerLeave={handlePointerLeave}
@@ -175,6 +219,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
