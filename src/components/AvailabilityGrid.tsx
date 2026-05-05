@@ -1,10 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useEventStore } from '@/stores/eventStore'
 import { usePaintStore } from '@/stores/paintStore'
 import { pack, unpack } from '@/lib/bitmap'
 import { slotsPerDay } from '@/lib/slots'
 import { formatSlotDateLabel, formatSlotTimeLabel } from '@/lib/timezoneSlots'
 import CellTooltip from '@/components/CellTooltip'
+
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+const UNDO_HOTKEY_LABEL = IS_MAC ? '⌘Z' : 'Ctrl+Z'
+const REDO_HOTKEY_LABEL = IS_MAC ? '⌘⇧Z' : 'Ctrl+Shift+Z'
+const UNDO_DEPTH = 50
 
 interface AvailabilityGridProps {
   viewerTimezone: string
@@ -22,6 +27,16 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   const paintMode = usePaintStore((s) => s.paintMode)
   const setPaintMode = usePaintStore((s) => s.setPaintMode)
   const [tooltipSlot, setTooltipSlot] = useState<number | null>(null)
+  const [undoStack, setUndoStack] = useState<string[]>([])
+  const [redoStack, setRedoStack] = useState<string[]>([])
+  // Track previous participantId to reset stacks when participant changes (render-phase pattern)
+  const prevParticipantIdRef = useRef<string | undefined>(undefined)
+  const currentParticipantId = myParticipant?.participantId
+  if (prevParticipantIdRef.current !== currentParticipantId) {
+    prevParticipantIdRef.current = currentParticipantId
+    if (undoStack.length > 0) setUndoStack([])
+    if (redoStack.length > 0) setRedoStack([])
+  }
 
   const spd = useMemo(
     () => (event ? slotsPerDay(event.timeRange, event.slotMinutes) : 0),
@@ -52,6 +67,59 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     return counts
   }, [event, participants, draftBits, myParticipant])
 
+  const pushHistory = useCallback((snapshot: string) => {
+    setUndoStack((prev) => {
+      const next = [...prev, snapshot]
+      if (next.length > UNDO_DEPTH) next.shift()
+      return next
+    })
+    setRedoStack([])
+  }, [])
+
+  const undo = useCallback(async () => {
+    if (undoStack.length === 0) return
+    const previous = undoStack[undoStack.length - 1]
+    const current = myParticipant?.availability ?? ''
+    setUndoStack((prev) => prev.slice(0, -1))
+    setRedoStack((prev) => [...prev, current])
+    await updateMyAvailability(previous)
+  }, [undoStack, myParticipant, updateMyAvailability])
+
+  const redo = useCallback(async () => {
+    if (redoStack.length === 0) return
+    const next = redoStack[redoStack.length - 1]
+    const current = myParticipant?.availability ?? ''
+    setRedoStack((prev) => prev.slice(0, -1))
+    setUndoStack((prev) => {
+      const nextStack = [...prev, current]
+      if (nextStack.length > UNDO_DEPTH) nextStack.shift()
+      return nextStack
+    })
+    await updateMyAvailability(next)
+  }, [redoStack, myParticipant, updateMyAvailability])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target) {
+        const tag = target.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
+      }
+      const meta = e.metaKey || e.ctrlKey
+      if (!meta) return
+      if (e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) {
+          void redo()
+        } else {
+          void undo()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [undo, redo])
+
   if (!event || !myParticipant || !myCommittedBits) {
     return <div className="text-center text-gray-500">Loading event…</div>
   }
@@ -72,6 +140,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     const value = anyOff
     const next = [...myCommittedBits]
     for (let i = startIdx; i <= endIdx; i++) next[i] = value
+    pushHistory(myParticipant?.availability ?? '')
     await updateMyAvailability(pack(next))
   }
 
@@ -87,18 +156,21 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     const value = anyOff
     const next = [...myCommittedBits]
     for (let d = 0; d < event.dates.length; d++) next[d * spd + timeIdx] = value
+    pushHistory(myParticipant?.availability ?? '')
     await updateMyAvailability(pack(next))
   }
 
   const setAllAvailable = async () => {
     if (!event || !myCommittedBits) return
     const next = new Array(event.slotCount).fill(true)
+    pushHistory(myParticipant?.availability ?? '')
     await updateMyAvailability(pack(next))
   }
 
   const setAllUnavailable = async () => {
     if (!event || !myCommittedBits) return
     const next = new Array(event.slotCount).fill(false)
+    pushHistory(myParticipant?.availability ?? '')
     await updateMyAvailability(pack(next))
   }
 
@@ -151,6 +223,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   const handlePointerUp = async () => {
     const finalBits = commitPaint()
     if (finalBits) {
+      pushHistory(myParticipant?.availability ?? '')
       await updateMyAvailability(pack(finalBits))
     }
   }
@@ -188,6 +261,26 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
           className="text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 rounded px-3 py-1"
         >
           Clear all
+        </button>
+        <button
+          type="button"
+          onClick={() => void undo()}
+          disabled={undoStack.length === 0}
+          title={`Undo (${UNDO_HOTKEY_LABEL})`}
+          aria-label={`Undo (${UNDO_HOTKEY_LABEL})`}
+          className="text-sm border border-gray-300 text-gray-700 hover:bg-gray-50 rounded px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          ↶ Undo
+        </button>
+        <button
+          type="button"
+          onClick={() => void redo()}
+          disabled={redoStack.length === 0}
+          title={`Redo (${REDO_HOTKEY_LABEL})`}
+          aria-label={`Redo (${REDO_HOTKEY_LABEL})`}
+          className="text-sm border border-gray-300 text-gray-700 hover:bg-gray-50 rounded px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Redo ↷
         </button>
       </div>
       <div className="overflow-auto flex justify-center">
