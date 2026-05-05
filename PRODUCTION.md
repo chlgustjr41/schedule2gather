@@ -308,17 +308,17 @@ Total target: **~5 weeks solo** to reach the Phase 5 / "polished launch" bar.
 
 **P2 implementation note:** The original spec called for a "canonical UTC slot index" data model. We chose a simpler design — keep the bitmap indexed by event-TZ slot position (P1's representation) and convert to viewer TZ at the *display* boundary only. This avoids a data migration, security-rule churn, and the special-case for `weekdays_recurring` mode. Functionally equivalent.
 
-### Phase 3 — Make it usable (~1 week)
+### Phase 3 — Make it usable (~1 week) ✅ COMPLETE 2026-05-05
 
 **Goal:** Mobile-first painting and power-user productivity.
 
 **In scope:**
-- Pointer Events API for unified mouse/touch/pen handling.
-- Explicit "paint mode" toggle button to prevent touch-vs-scroll conflict.
-- Haptic feedback (`navigator.vibrate`) where supported.
-- Undo/redo stack on the grid (in-memory only; not persisted).
-- Keyboard navigation (arrow keys + space) and proper ARIA grid semantics.
-- 300 ms write debounce.
+- ✅ Pointer Events API for unified mouse/touch/pen handling. (Landed in P1; the P2-era paintbrush fix consolidated path-tracking via `elementFromPoint`.)
+- ✅ Explicit "paint mode" toggle button to prevent touch-vs-scroll conflict. Off by default; toggleable. Cells gate `touch-action` on the toggle state.
+- ✅ Haptic feedback (`navigator.vibrate(15)`) on paint start and on each new cell entered during a drag. iOS Safari silently no-ops (no Vibration API).
+- ✅ Undo/redo stack on the grid (in-memory only; depth 50; per-event reset). Buttons + Ctrl+Z / Ctrl+Shift+Z hotkeys with hover tooltips showing the shortcut.
+- ✅ Keyboard navigation (arrow keys + Space/Enter) and ARIA grid semantics (`role="grid"`/`row`/`columnheader`/`rowheader`/`gridcell`, roving tabindex, `aria-selected`, `aria-label` per cell).
+- 300 ms write debounce — N/A; commit-on-pointer-up since P1 is functionally equivalent (one Firestore write per stroke).
 
 **Out of scope:** Best-slot ranking, export, 3-state, PWA, observability.
 
