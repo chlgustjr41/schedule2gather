@@ -3,10 +3,12 @@ import { useParams } from 'react-router-dom'
 import { useEventStore } from '@/stores/eventStore'
 import { useAuthStore } from '@/stores/authStore'
 import { loadParticipantsForEvent } from '@/lib/participantId'
+import { setOwnerEmail } from '@/services/eventService'
 import NamePrompt from '@/components/NamePrompt'
 import AvailabilityGrid from '@/components/AvailabilityGrid'
 import EventNotFound from '@/components/EventNotFound'
 import HostBadge from '@/components/HostBadge'
+import SignInButton from '@/components/SignInButton'
 import ShareLinkBanner from '@/components/ShareLinkBanner'
 import TimezonePicker from '@/components/TimezonePicker'
 
@@ -64,6 +66,16 @@ export default function EventPage() {
 
   const isHost = user?.uid === event.ownerUid
 
+  const handleHostSignedIn = async (email: string | null) => {
+    if (slug && email) {
+      try {
+        await setOwnerEmail(slug, email)
+      } catch (err) {
+        console.warn('Failed to write ownerEmail:', err)
+      }
+    }
+  }
+
   const handleJoin = async (name: string) => {
     if (!slug || !user) return
     try {
@@ -95,7 +107,12 @@ export default function EventPage() {
             {event.timeRange.start}:00–{event.timeRange.end}:00 · {event.slotMinutes} min slots ·{' '}
             {event.timezone}
           </p>
-          {isHost && <div className="mt-2"><HostBadge /></div>}
+          {isHost && (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <HostBadge />
+              <SignInButton onSignedIn={handleHostSignedIn} />
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-2">
           {myParticipant && (

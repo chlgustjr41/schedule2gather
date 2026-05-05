@@ -1,15 +1,20 @@
 import { create } from 'zustand'
 import {
   signInAnonymously,
+  signInWithPopup,
+  linkWithPopup,
+  signOut as fbSignOut,
   onAuthStateChanged,
   type User,
 } from 'firebase/auth'
-import { auth } from '@/services/firebase'
+import { auth, googleProvider } from '@/services/firebase'
 
 interface AuthState {
   user: User | null
   loading: boolean
   init: () => () => void
+  signInWithGoogle: () => Promise<void>
+  signOut: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>((setState) => ({
@@ -31,5 +36,28 @@ export const useAuthStore = create<AuthState>((setState) => ({
       }
     })
     return unsub
+  },
+
+  signInWithGoogle: async () => {
+    const current = auth.currentUser
+    if (current && current.isAnonymous) {
+      try {
+        await linkWithPopup(current, googleProvider)
+        return
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code
+        if (code === 'auth/credential-already-in-use' || code === 'auth/email-already-in-use') {
+          // Fall through to sign-in
+        } else {
+          throw err
+        }
+      }
+    }
+    await signInWithPopup(auth, googleProvider)
+  },
+
+  signOut: async () => {
+    await fbSignOut(auth)
+    // The auth listener will fire onAuthStateChanged with null and re-trigger anonymous sign-in.
   },
 }))
