@@ -36,7 +36,6 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   const isMobile = useIsMobile()
   const [pageSize, setPageSize] = useState<7 | 31>(7)
   const [pageIdx, setPageIdx] = useState(0)
-  const [fitView, setFitView] = useState(false)
   // Track previous participantId to reset stacks when participant changes (render-phase pattern)
   const prevParticipantIdRef = useRef<string | undefined>(undefined)
   const currentParticipantId = myParticipant?.participantId
@@ -92,12 +91,10 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     setPageIdx(0)
   }
 
-  const effectivePaintMode = isMobile
-    ? (viewMode === 'week' ? true : (fitView ? true : paintMode))
-    : true
-  const showPaintToggle = isMobile && viewMode === 'month' && !fitView
-  const showFitToggle = isMobile && viewMode === 'month'
-  const stickyTimeColumn = isMobile && viewMode === 'month' && !fitView
+  const effectivePaintMode = isMobile ? (viewMode === 'week' ? true : paintMode) : true
+  const showPaintToggle = isMobile && viewMode === 'month'
+  const stickyTimeColumn = isMobile && viewMode === 'month'
+  const scrollableMonth = isMobile && viewMode === 'month'
 
   const myCommittedBits = useMemo(() => {
     if (!event || !myParticipant) return null
@@ -422,14 +419,14 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
           Redo ↷
         </button>
       </div>
-      <div className="overflow-auto flex justify-center">
+      <div className={scrollableMonth ? 'overflow-x-auto' : 'overflow-auto flex justify-center'}>
       <table
         ref={tableRef}
         role="grid"
         aria-label={event ? `Availability grid for ${event.name}` : 'Availability grid'}
         aria-rowcount={spd + 1}
         aria-colcount={event ? event.dates.length + 1 : 0}
-        className={`border-collapse select-none mx-auto ${fitView ? 'table-fixed w-full' : ''}`}
+        className={`border-collapse select-none ${scrollableMonth ? '' : 'mx-auto'}`}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
@@ -490,7 +487,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
                     <td
                       key={`${col.dateStr}-${timeIdx}`}
                       aria-disabled="true"
-                      className={`${fitView ? '' : 'w-12'} h-6 border border-gray-200 bg-gray-100`}
+                      className="w-12 h-6 border border-gray-200 bg-gray-100"
                     />
                   )
                 }
@@ -518,7 +515,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
                       backgroundColor: bg,
                       touchAction: effectivePaintMode ? 'none' : 'auto',
                     }}
-                    className={`${fitView ? '' : 'w-12'} h-6 border border-gray-200 cursor-pointer relative focus:outline-2 focus:outline-indigo-500 focus:outline-offset-[-2px]`}
+                    className="w-12 h-6 border border-gray-200 cursor-pointer relative focus:outline-2 focus:outline-indigo-500 focus:outline-offset-[-2px]"
                   >
                     {tooltipSlot === slotIdx && !draftBits && (
                       <CellTooltip
@@ -533,46 +530,25 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
         </tbody>
       </table>
       </div>
-      {(showFitToggle || showPaintToggle) && (
-        <div className="flex justify-center gap-2 mt-3 flex-wrap">
-          {showPaintToggle && (
-            <button
-              type="button"
-              onClick={() => setPaintMode(!paintMode)}
-              aria-pressed={paintMode}
-              className={
-                paintMode
-                  ? 'text-sm rounded px-3 py-1 bg-indigo-600 text-white border border-indigo-600 hover:bg-indigo-700'
-                  : 'text-sm rounded px-3 py-1 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }
-              title={
-                paintMode
-                  ? 'Turn off paint mode (touch will scroll the grid)'
-                  : 'Turn on paint mode (touch will paint cells)'
-              }
-            >
-              {paintMode ? 'Paint Mode: On' : 'Paint Mode: Off — tap to paint'}
-            </button>
-          )}
-          {showFitToggle && (
-            <button
-              type="button"
-              onClick={() => setFitView(!fitView)}
-              aria-pressed={fitView}
-              className={
-                fitView
-                  ? 'text-sm rounded px-3 py-1 bg-indigo-600 text-white border border-indigo-600 hover:bg-indigo-700'
-                  : 'text-sm rounded px-3 py-1 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }
-              title={
-                fitView
-                  ? 'Turn off fit view (grid scrolls horizontally with full-size cells)'
-                  : 'Turn on fit view (entire month visible without scrolling; cells are smaller)'
-              }
-            >
-              {fitView ? 'Fit View: On' : 'Fit View: Off'}
-            </button>
-          )}
+      {showPaintToggle && (
+        <div className="flex justify-center mt-3">
+          <button
+            type="button"
+            onClick={() => setPaintMode(!paintMode)}
+            aria-pressed={paintMode}
+            className={
+              paintMode
+                ? 'text-sm rounded px-3 py-1 bg-indigo-600 text-white border border-indigo-600 hover:bg-indigo-700'
+                : 'text-sm rounded px-3 py-1 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+            }
+            title={
+              paintMode
+                ? 'Turn off paint mode (touch will scroll the grid)'
+                : 'Turn on paint mode (touch will paint cells)'
+            }
+          >
+            {paintMode ? 'Paint Mode: On' : 'Paint Mode: Off — tap to paint'}
+          </button>
         </div>
       )}
       {isMobile && totalPages > 1 && (
@@ -589,8 +565,8 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
           <span className="text-sm text-gray-500 min-w-[120px] text-center whitespace-nowrap">
             {currentPageStart && (
               viewMode === 'week'
-                ? `Week ${safePageIdx + 1} / ${totalPages} · ${format(currentPageStart, 'MMM d')}`
-                : `${format(currentPageStart, 'MMMM yyyy')} (${safePageIdx + 1} / ${totalPages})`
+                ? `${format(currentPageStart, 'MMM d')} (${safePageIdx + 1}/${totalPages})`
+                : `${format(currentPageStart, 'MMMM yyyy')} (${safePageIdx + 1}/${totalPages})`
             )}
           </span>
           <button
