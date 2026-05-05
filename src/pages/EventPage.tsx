@@ -39,10 +39,13 @@ export default function EventPage() {
     const map = loadParticipantsForEvent(slug)
     const entries = Object.entries(map)
     if (entries.length === 1) {
-      const [normalizedName] = entries[0]
-      void joinAs(normalizedName, user.uid)
+      const [normalizedKey, stored] = entries[0]
+      void joinAs(stored.rawName || normalizedKey, user.uid)
     } else {
-      setNamePrompt({ show: true, priorNames: entries.map(([n]) => n) })
+      setNamePrompt({
+        show: true,
+        priorNames: entries.map(([n, stored]) => stored.rawName || n),
+      })
     }
   }, [slug, event, user, myParticipant, joinAs])
 
