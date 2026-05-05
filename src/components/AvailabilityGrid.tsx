@@ -29,6 +29,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   const [tooltipSlot, setTooltipSlot] = useState<number | null>(null)
   const [undoStack, setUndoStack] = useState<string[]>([])
   const [redoStack, setRedoStack] = useState<string[]>([])
+  const [focusedSlot, setFocusedSlot] = useState<number>(0)
   // Track previous participantId to reset stacks when participant changes (render-phase pattern)
   const prevParticipantIdRef = useRef<string | undefined>(undefined)
   const currentParticipantId = myParticipant?.participantId
@@ -36,6 +37,12 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     prevParticipantIdRef.current = currentParticipantId
     if (undoStack.length > 0) setUndoStack([])
     if (redoStack.length > 0) setRedoStack([])
+  }
+  const tableRef = useRef<HTMLTableElement>(null)
+
+  // Clamp focusedSlot when slotCount changes (e.g., switching events).
+  if (event && focusedSlot >= event.slotCount) {
+    setFocusedSlot(0)
   }
 
   const spd = useMemo(
@@ -228,6 +235,63 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     }
   }
 
+  const focusSlotCell = (slotIdx: number) => {
+    if (!tableRef.current) return
+    const cell = tableRef.current.querySelector<HTMLElement>(`td[data-slot-idx="${slotIdx}"]`)
+    if (cell) cell.focus()
+  }
+
+  const toggleSingleSlot = async (slotIdx: number) => {
+    if (!myCommittedBits) return
+    pushHistory(myParticipant?.availability ?? '')
+    const next = [...myCommittedBits]
+    next[slotIdx] = !next[slotIdx]
+    await updateMyAvailability(pack(next))
+  }
+
+  const handleGridKeyDown = (e: React.KeyboardEvent<HTMLTableElement>) => {
+    if (!event) return
+    const target = e.target as HTMLElement | null
+    if (!target || !target.matches('td[data-slot-idx]')) return
+
+    const cur = Number(target.dataset.slotIdx)
+    if (Number.isNaN(cur)) return
+    const dateIdx = Math.floor(cur / spd)
+    const timeIdx = cur % spd
+    const lastDate = event.dates.length - 1
+    const lastTime = spd - 1
+
+    let nextIdx: number | null = null
+    switch (e.key) {
+      case 'ArrowUp':
+        if (timeIdx > 0) nextIdx = dateIdx * spd + (timeIdx - 1)
+        break
+      case 'ArrowDown':
+        if (timeIdx < lastTime) nextIdx = dateIdx * spd + (timeIdx + 1)
+        break
+      case 'ArrowLeft':
+        if (dateIdx > 0) nextIdx = (dateIdx - 1) * spd + timeIdx
+        break
+      case 'ArrowRight':
+        if (dateIdx < lastDate) nextIdx = (dateIdx + 1) * spd + timeIdx
+        break
+      case ' ':
+      case 'Enter':
+        e.preventDefault()
+        void toggleSingleSlot(cur)
+        return
+      default:
+        return
+    }
+
+    if (nextIdx !== null) {
+      e.preventDefault()
+      setFocusedSlot(nextIdx)
+      // Defer focus call to next tick so the new cell's tabindex is updated first.
+      requestAnimationFrame(() => focusSlotCell(nextIdx))
+    }
+  }
+
   return (
     <div className="p-4">
       <div className="flex justify-center gap-2 mb-3 flex-wrap">
@@ -285,17 +349,25 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
       </div>
       <div className="overflow-auto flex justify-center">
       <table
+        ref={tableRef}
+        role="grid"
+        aria-label={event ? `Availability grid for ${event.name}` : 'Availability grid'}
+        aria-rowcount={spd + 1}
+        aria-colcount={event ? event.dates.length + 1 : 0}
         className="border-collapse select-none mx-auto"
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onKeyDown={handleGridKeyDown}
       >
         <thead>
-          <tr>
-            <th className="w-20"></th>
+          <tr role="row">
+            <th className="w-20" aria-hidden="true"></th>
             {event.dates.map((d, dateIdx) => (
               <th
                 key={d}
+                role="columnheader"
+                scope="col"
                 onClick={() => void toggleColumn(dateIdx)}
                 className="p-2 text-sm font-medium cursor-pointer select-none hover:bg-gray-50"
                 title="Click to toggle this entire column"
@@ -307,8 +379,10 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
         </thead>
         <tbody>
           {Array.from({ length: spd }).map((_, timeIdx) => (
-            <tr key={timeIdx}>
+            <tr key={timeIdx} role="row">
               <td
+                role="rowheader"
+                scope="row"
                 onClick={() => void toggleRow(timeIdx)}
                 className="text-xs text-gray-500 pr-2 align-top cursor-pointer select-none hover:text-gray-700"
                 title="Click to toggle this entire row"
@@ -327,7 +401,12 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
                 return (
                   <td
                     key={slotIdx}
+                    role="gridcell"
+                    tabIndex={slotIdx === focusedSlot ? 0 : -1}
+                    aria-selected={mine}
+                    aria-label={`${formatSlotDateLabel(event, dateIdx, viewerTimezone)} ${formatSlotTimeLabel(event, timeIdx, viewerTimezone)} — ${mine ? 'available' : 'unavailable'}`}
                     data-slot-idx={slotIdx}
+                    onFocus={() => setFocusedSlot(slotIdx)}
                     onPointerDown={handlePointerDown(slotIdx)}
                     onPointerEnter={handlePointerEnter(slotIdx)}
                     onPointerLeave={handlePointerLeave}
@@ -335,7 +414,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
                       backgroundColor: bg,
                       touchAction: paintMode ? 'none' : 'auto',
                     }}
-                    className="w-12 h-6 border border-gray-200 cursor-pointer relative"
+                    className="w-12 h-6 border border-gray-200 cursor-pointer relative focus:outline-2 focus:outline-indigo-500 focus:outline-offset-[-2px]"
                   >
                     {tooltipSlot === slotIdx && !draftBits && (
                       <CellTooltip
