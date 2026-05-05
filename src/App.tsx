@@ -6,19 +6,11 @@ import EventPage from '@/pages/EventPage'
 
 export default function App() {
   const init = useAuthStore((s) => s.init)
-  const user = useAuthStore((s) => s.user)
 
   useEffect(() => {
     const unsub = init()
     return unsub
   }, [init])
-
-  useEffect(() => {
-    if (user) {
-      // TODO(p1): remove — needed for P0 acceptance only
-      console.log('Anonymous UID:', user.uid)
-    }
-  }, [user])
 
   return (
     <BrowserRouter>

@@ -4,7 +4,7 @@ Out-of-scope items captured during phase work. Each phase reviews this at start 
 
 ## Phase 1 — Core loop
 
-- Remove the `console.log('Anonymous UID:', user.uid)` debug line in `src/App.tsx` (was tagged `// TODO(p1): remove` during P0 — it was needed for the P0 acceptance criterion but should not ship in P1).
+_(empty — P1 shipped)_
 
 ## Phase 2 — Real users, real zones
 
