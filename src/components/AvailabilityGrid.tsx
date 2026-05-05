@@ -317,7 +317,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
 
   return (
     <div className="p-4">
-      <div className="flex justify-center gap-2 mb-3 flex-wrap">
+      <div className="flex justify-center gap-1 sm:gap-2 mb-3 flex-wrap">
         {isMobile && (
           <div className="flex rounded border border-gray-300 overflow-hidden text-sm">
             <button

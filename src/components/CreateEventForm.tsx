@@ -13,11 +13,13 @@ import {
 } from 'date-fns'
 import { createEvent } from '@/services/eventService'
 import { COMMON_TIMEZONES, detectTimezone, formatTimezoneLabel } from '@/lib/timezones'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 type DayCategory = 'all' | 'weekdays' | 'weekends'
 
 export default function CreateEventForm() {
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -123,14 +125,14 @@ export default function CreateEventForm() {
     <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-5">
       <div>
         <label className="block text-sm font-medium mb-2">When could the event happen?</label>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mb-3">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-x-6 gap-y-2 mb-3">
           {renderQuickRow(today)}
           {renderQuickRow(nextMonth)}
           {selectedDates.length > 0 && (
             <button
               type="button"
               onClick={() => setSelectedDates([])}
-              className="text-xs text-gray-500 hover:text-gray-700 underline ml-auto"
+              className="text-xs text-gray-500 hover:text-gray-700 underline sm:ml-auto self-start sm:self-auto"
             >
               Clear all
             </button>
@@ -139,7 +141,7 @@ export default function CreateEventForm() {
         <div className="rdp-side-by-side">
           <DayPicker
             mode="multiple"
-            numberOfMonths={2}
+            numberOfMonths={isMobile ? 1 : 2}
             selected={selectedDates}
             onSelect={(dates) => setSelectedDates(dates ?? [])}
             disabled={{ before: today }}
