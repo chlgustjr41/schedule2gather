@@ -19,6 +19,8 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   const dragTo = usePaintStore((s) => s.dragTo)
   const commitPaint = usePaintStore((s) => s.commitPaint)
   const draftBits = usePaintStore((s) => s.draftBits)
+  const paintMode = usePaintStore((s) => s.paintMode)
+  const setPaintMode = usePaintStore((s) => s.setPaintMode)
   const [tooltipSlot, setTooltipSlot] = useState<number | null>(null)
 
   const spd = useMemo(
@@ -100,10 +102,22 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     await updateMyAvailability(pack(next))
   }
 
+  const triggerHaptic = () => {
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      try {
+        navigator.vibrate(15)
+      } catch {
+        // Vibration API can throw if user has disabled it; ignore.
+      }
+    }
+  }
+
   const handlePointerDown = (slotIdx: number) => (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch' && !paintMode) return
     e.preventDefault()
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
     startPaint(slotIdx, myCommittedBits)
+    triggerHaptic()
   }
 
   const handlePointerEnter = (slotIdx: number) => () => {
@@ -128,7 +142,10 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     if (!slotIdxStr) return
     const slotIdx = Number(slotIdxStr)
     if (Number.isNaN(slotIdx)) return
+    // Capture visited-state BEFORE dragTo (which may add slotIdx).
+    const wasNew = !usePaintStore.getState().visited.has(slotIdx)
     dragTo(slotIdx, myCommittedBits)
+    if (wasNew) triggerHaptic()
   }
 
   const handlePointerUp = async () => {
@@ -140,7 +157,24 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
 
   return (
     <div className="p-4">
-      <div className="flex justify-center gap-2 mb-3">
+      <div className="flex justify-center gap-2 mb-3 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setPaintMode(!paintMode)}
+          aria-pressed={paintMode}
+          className={
+            paintMode
+              ? 'text-sm rounded px-3 py-1 bg-indigo-600 text-white border border-indigo-600 hover:bg-indigo-700'
+              : 'text-sm rounded px-3 py-1 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+          }
+          title={
+            paintMode
+              ? 'Turn off paint mode (touch will scroll the page)'
+              : 'Turn on paint mode (touch will paint cells; required on mobile)'
+          }
+        >
+          {paintMode ? 'Paint Mode: On' : 'Paint Mode: Off'}
+        </button>
         <button
           type="button"
           onClick={() => void setAllAvailable()}
@@ -204,7 +238,10 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
                     onPointerDown={handlePointerDown(slotIdx)}
                     onPointerEnter={handlePointerEnter(slotIdx)}
                     onPointerLeave={handlePointerLeave}
-                    style={{ backgroundColor: bg }}
+                    style={{
+                      backgroundColor: bg,
+                      touchAction: paintMode ? 'none' : 'auto',
+                    }}
                     className="w-12 h-6 border border-gray-200 cursor-pointer relative"
                   >
                     {tooltipSlot === slotIdx && !draftBits && (

@@ -6,10 +6,12 @@ interface PaintState {
   draftBits: boolean[] | null
   /** "on" means the drag is filling cells true; "off" means clearing. Null when not painting. */
   mode: 'on' | 'off' | null
+  paintMode: boolean
 
   startPaint: (slotIdx: number, currentBits: boolean[]) => void
   dragTo: (slotIdx: number, currentBits: boolean[]) => void
   commitPaint: () => boolean[] | null
+  setPaintMode: (on: boolean) => void
 }
 
 export const usePaintStore = create<PaintState>((set, get) => ({
@@ -17,6 +19,7 @@ export const usePaintStore = create<PaintState>((set, get) => ({
   visited: new Set<number>(),
   draftBits: null,
   mode: null,
+  paintMode: false,
 
   startPaint: (slotIdx, currentBits) => {
     const startState = currentBits[slotIdx] ?? false
@@ -50,5 +53,9 @@ export const usePaintStore = create<PaintState>((set, get) => ({
     const draft = state.draftBits
     set({ origin: null, visited: new Set<number>(), draftBits: null, mode: null })
     return draft
+  },
+
+  setPaintMode: (on) => {
+    set({ paintMode: on })
   },
 }))
