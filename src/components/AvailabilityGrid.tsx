@@ -3,34 +3,14 @@ import { useEventStore } from '@/stores/eventStore'
 import { usePaintStore } from '@/stores/paintStore'
 import { pack, unpack } from '@/lib/bitmap'
 import { slotsPerDay } from '@/lib/slots'
+import { formatSlotDateLabel, formatSlotTimeLabel } from '@/lib/timezoneSlots'
 import CellTooltip from '@/components/CellTooltip'
 
-const WEEKDAY_LABELS: Record<string, string> = {
-  mon: 'Mon',
-  tue: 'Tue',
-  wed: 'Wed',
-  thu: 'Thu',
-  fri: 'Fri',
-  sat: 'Sat',
-  sun: 'Sun',
+interface AvailabilityGridProps {
+  viewerTimezone: string
 }
 
-function formatDateLabel(dateStr: string, mode: string): string {
-  if (mode === 'weekdays_recurring') {
-    return WEEKDAY_LABELS[dateStr] ?? dateStr
-  }
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-function formatTimeLabel(timeIdx: number, startHour: number, slotMinutes: number): string {
-  const totalMins = startHour * 60 + timeIdx * slotMinutes
-  const h = Math.floor(totalMins / 60)
-  const m = totalMins % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-}
-
-export default function AvailabilityGrid() {
+export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridProps) {
   const event = useEventStore((s) => s.event)
   const myParticipant = useEventStore((s) => s.myParticipant)
   const participants = useEventStore((s) => s.participants)
@@ -111,9 +91,9 @@ export default function AvailabilityGrid() {
         <thead>
           <tr>
             <th className="w-20"></th>
-            {event.dates.map((d) => (
+            {event.dates.map((d, dateIdx) => (
               <th key={d} className="p-2 text-sm font-medium">
-                {formatDateLabel(d, event.mode)}
+                {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
               </th>
             ))}
           </tr>
@@ -122,7 +102,8 @@ export default function AvailabilityGrid() {
           {Array.from({ length: spd }).map((_, timeIdx) => (
             <tr key={timeIdx}>
               <td className="text-xs text-gray-500 pr-2 align-top">
-                {formatTimeLabel(timeIdx, event.timeRange.start, event.slotMinutes)}
+                {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
+                {formatSlotTimeLabel(event, timeIdx, viewerTimezone)}
               </td>
               {event.dates.map((_, dateIdx) => {
                 const slotIdx = dateIdx * spd + timeIdx

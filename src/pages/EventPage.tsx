@@ -21,6 +21,7 @@ export default function EventPage() {
   const loadEvent = useEventStore((s) => s.loadEvent)
   const joinAs = useEventStore((s) => s.joinAs)
   const reset = useEventStore((s) => s.reset)
+  const viewerTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   // useReducer instead of useState: the project's react-hooks/set-state-in-effect
   // lint rule rejects setState calls inside effects. A reducer dispatch is allowed.
   const [namePrompt, setNamePrompt] = useReducer(
@@ -98,7 +99,7 @@ export default function EventPage() {
         </div>
       </div>
 
-      {myParticipant && <AvailabilityGrid />}
+      {myParticipant && <AvailabilityGrid viewerTimezone={viewerTimezone} />}
 
       {namePrompt.show && (
         <NamePrompt
