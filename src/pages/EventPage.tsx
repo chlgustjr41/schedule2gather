@@ -11,6 +11,7 @@ import HostBadge from '@/components/HostBadge'
 import SignInButton from '@/components/SignInButton'
 import ShareLinkBanner from '@/components/ShareLinkBanner'
 import TimezonePicker from '@/components/TimezonePicker'
+import CommentsPanel from '@/components/CommentsPanel'
 
 type NamePromptState = { show: false } | { show: true; priorNames: string[]; error: string | null }
 
@@ -123,6 +124,15 @@ export default function EventPage() {
       </div>
 
       {myParticipant && <AvailabilityGrid viewerTimezone={viewerTimezone} />}
+
+      {slug && (
+        <CommentsPanel
+          slug={slug}
+          myParticipant={myParticipant}
+          isHost={isHost}
+          viewerUid={user?.uid ?? null}
+        />
+      )}
 
       {namePrompt.show && (
         <NamePrompt
