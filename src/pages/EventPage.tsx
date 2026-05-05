@@ -9,7 +9,7 @@ import EventNotFound from '@/components/EventNotFound'
 import HostBadge from '@/components/HostBadge'
 import ShareLinkBanner from '@/components/ShareLinkBanner'
 
-type NamePromptState = { show: false } | { show: true; priorNames: string[] }
+type NamePromptState = { show: false } | { show: true; priorNames: string[]; error: string | null }
 
 export default function EventPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -45,6 +45,7 @@ export default function EventPage() {
       setNamePrompt({
         show: true,
         priorNames: entries.map(([n, stored]) => stored.rawName || n),
+        error: null,
       })
     }
   }, [slug, event, user, myParticipant, joinAs])
@@ -61,8 +62,20 @@ export default function EventPage() {
 
   const handleJoin = async (name: string) => {
     if (!slug || !user) return
-    await joinAs(name, user.uid)
-    setNamePrompt({ show: false })
+    try {
+      await joinAs(name, user.uid)
+      setNamePrompt({ show: false })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to join. Try again.'
+      // Reload the prior-names hint so the prompt re-renders with the error.
+      const map = loadParticipantsForEvent(slug)
+      const entries = Object.entries(map)
+      setNamePrompt({
+        show: true,
+        priorNames: entries.map(([n, stored]) => stored.rawName || n),
+        error: msg,
+      })
+    }
   }
 
   const shareUrl = `${window.location.origin}/e/${slug}`
@@ -87,7 +100,13 @@ export default function EventPage() {
 
       {myParticipant && <AvailabilityGrid />}
 
-      {namePrompt.show && <NamePrompt priorNames={namePrompt.priorNames} onSubmit={handleJoin} />}
+      {namePrompt.show && (
+        <NamePrompt
+          priorNames={namePrompt.priorNames}
+          error={namePrompt.error}
+          onSubmit={handleJoin}
+        />
+      )}
     </div>
   )
 }

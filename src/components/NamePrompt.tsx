@@ -1,12 +1,13 @@
 import { useState } from 'react'
 
 interface NamePromptProps {
-  /** Optional: prior names found in localStorage for this event. Empty array = no prior names. */
   priorNames: string[]
+  /** Optional: an error message to display (e.g., from a failed join attempt). */
+  error?: string | null
   onSubmit: (name: string) => void
 }
 
-export default function NamePrompt({ priorNames, onSubmit }: NamePromptProps) {
+export default function NamePrompt({ priorNames, error, onSubmit }: NamePromptProps) {
   const [name, setName] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -53,6 +54,7 @@ export default function NamePrompt({ priorNames, onSubmit }: NamePromptProps) {
           className="w-full border rounded px-3 py-2"
           placeholder="Alice"
         />
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         <button
           type="submit"
           disabled={submitting || name.trim().length === 0}
