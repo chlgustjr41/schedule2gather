@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { format } from 'date-fns'
 import { useEventStore } from '@/stores/eventStore'
 import { usePaintStore } from '@/stores/paintStore'
 import { pack, unpack } from '@/lib/bitmap'
 import { slotsPerDay } from '@/lib/slots'
 import { formatSlotDateLabel, formatSlotTimeLabel } from '@/lib/timezoneSlots'
+import { getMonthPages, getVisibleColumns, getWeekPages, type CalendarColumn } from '@/lib/calendarPages'
 import CellTooltip from '@/components/CellTooltip'
 import { useIsMobile } from '@/hooks/useIsMobile'
 
@@ -54,19 +56,43 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     [event],
   )
 
-  const totalDates = event ? event.dates.length : 0
-  const visibleStart = isMobile ? pageIdx * pageSize : 0
-  const visibleEnd = isMobile
-    ? Math.min(visibleStart + pageSize, totalDates)
-    : totalDates
-  const totalPages = isMobile ? Math.max(1, Math.ceil(totalDates / pageSize)) : 1
+  // Week/month pages for mobile views (computed once per event change)
+  const weekPages = useMemo(
+    () => (event ? getWeekPages(event.dates) : []),
+    [event],
+  )
+  const monthPages = useMemo(
+    () => (event ? getMonthPages(event.dates) : []),
+    [event],
+  )
+  const viewMode: 'week' | 'month' = pageSize === 7 ? 'week' : 'month'
+  const pages = isMobile ? (viewMode === 'week' ? weekPages : monthPages) : []
+  const totalPages = pages.length > 0 ? pages.length : 1
+  const safePageIdx = Math.min(pageIdx, Math.max(0, pages.length - 1))
+  const currentPageStart = pages.length > 0 ? pages[safePageIdx] : null
 
-  // Clamp pageIdx when pageSize or totalDates changes.
+  // visibleColumns: list of CalendarColumn for rendering. On desktop, list every event date.
+  // On mobile, list the calendar columns for the current page (with greyed entries for out-of-range dates).
+  const visibleColumns: CalendarColumn[] = useMemo(() => {
+    if (!event) return []
+    if (!isMobile) {
+      return event.dates.map((d, idx) => ({
+        date: new Date(d + 'T00:00:00'),
+        dateStr: d,
+        eventDateIdx: idx,
+      }))
+    }
+    if (!currentPageStart) return []
+    return getVisibleColumns(currentPageStart, viewMode, event.dates)
+  }, [event, isMobile, currentPageStart, viewMode])
+
+  // Clamp pageIdx when pageSize or pages change.
   if (pageIdx >= totalPages) {
     setPageIdx(0)
   }
 
-  const effectivePaintMode = isMobile ? true : paintMode
+  const effectivePaintMode = isMobile ? (viewMode === 'week' ? true : paintMode) : true
+  const showPaintToggle = isMobile && viewMode === 'month'
 
   const myCommittedBits = useMemo(() => {
     if (!event || !myParticipant) return null
@@ -305,10 +331,20 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     if (nextIdx !== null) {
       e.preventDefault()
       const nextDateIdx = Math.floor(nextIdx / spd)
-      if (isMobile && (nextDateIdx < visibleStart || nextDateIdx >= visibleEnd)) {
-        // Move to the page containing nextDateIdx
-        const newPageIdx = Math.floor(nextDateIdx / pageSize)
-        setPageIdx(newPageIdx)
+      if (isMobile && event) {
+        const targetEventDate = event.dates[nextDateIdx]
+        if (targetEventDate) {
+          // Find the page (week or month start) containing this date
+          const targetD = new Date(targetEventDate + 'T00:00:00')
+          const newPageIdx = pages.findIndex((pageStart, i) => {
+            const nextStart = pages[i + 1]
+            return targetD.getTime() >= pageStart.getTime() &&
+              (!nextStart || targetD.getTime() < nextStart.getTime())
+          })
+          if (newPageIdx >= 0 && newPageIdx !== safePageIdx) {
+            setPageIdx(newPageIdx)
+          }
+        }
       }
       setFocusedSlot(nextIdx)
       requestAnimationFrame(() => focusSlotCell(nextIdx))
@@ -345,25 +381,6 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
               Month
             </button>
           </div>
-        )}
-        {!isMobile && (
-          <button
-            type="button"
-            onClick={() => setPaintMode(!paintMode)}
-            aria-pressed={paintMode}
-            className={
-              paintMode
-                ? 'text-sm rounded px-3 py-1 bg-indigo-600 text-white border border-indigo-600 hover:bg-indigo-700'
-                : 'text-sm rounded px-3 py-1 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }
-            title={
-              paintMode
-                ? 'Turn off paint mode (touch will scroll the page)'
-                : 'Turn on paint mode (touch will paint cells; required on mobile)'
-            }
-          >
-            {paintMode ? 'Paint Mode: On' : 'Paint Mode: Off'}
-          </button>
         )}
         <button
           type="button"
@@ -416,11 +433,23 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
         <thead>
           <tr role="row">
             <th className="w-20" aria-hidden="true"></th>
-            {event.dates.slice(visibleStart, visibleEnd).map((d, localIdx) => {
-              const dateIdx = visibleStart + localIdx
+            {visibleColumns.map((col) => {
+              if (col.eventDateIdx === -1) {
+                return (
+                  <th
+                    key={col.dateStr}
+                    role="columnheader"
+                    scope="col"
+                    className="p-2 text-sm font-medium text-gray-300 select-none"
+                  >
+                    {format(col.date, 'EEE d')}
+                  </th>
+                )
+              }
+              const dateIdx = col.eventDateIdx
               return (
                 <th
-                  key={d}
+                  key={col.dateStr}
                   role="columnheader"
                   scope="col"
                   onClick={() => void toggleColumn(dateIdx)}
@@ -446,8 +475,18 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
                 {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
                 {formatSlotTimeLabel(event, timeIdx, viewerTimezone)}
               </td>
-              {event.dates.slice(visibleStart, visibleEnd).map((_d, localIdx) => {
-                const dateIdx = visibleStart + localIdx
+              {visibleColumns.map((col) => {
+                if (col.eventDateIdx === -1) {
+                  // Greyed out-of-range cell
+                  return (
+                    <td
+                      key={`${col.dateStr}-${timeIdx}`}
+                      aria-disabled="true"
+                      className="w-12 h-6 border border-gray-200 bg-gray-100"
+                    />
+                  )
+                }
+                const dateIdx = col.eventDateIdx
                 const slotIdx = dateIdx * spd + timeIdx
                 const mine = myDisplayBits[slotIdx]
                 const count = aggregateCounts[slotIdx]
@@ -486,6 +525,27 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
         </tbody>
       </table>
       </div>
+      {showPaintToggle && (
+        <div className="flex justify-center mt-3">
+          <button
+            type="button"
+            onClick={() => setPaintMode(!paintMode)}
+            aria-pressed={paintMode}
+            className={
+              paintMode
+                ? 'text-sm rounded px-3 py-1 bg-indigo-600 text-white border border-indigo-600 hover:bg-indigo-700'
+                : 'text-sm rounded px-3 py-1 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+            }
+            title={
+              paintMode
+                ? 'Turn off paint mode (touch will scroll the grid)'
+                : 'Turn on paint mode (touch will paint cells)'
+            }
+          >
+            {paintMode ? 'Paint Mode: On' : 'Paint Mode: Off — tap to paint'}
+          </button>
+        </div>
+      )}
       {isMobile && totalPages > 1 && (
         <div className="flex justify-center items-center gap-3 mt-3 pb-2">
           <button
@@ -497,8 +557,8 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
           >
             ← Prev
           </button>
-          <span className="text-sm text-gray-500 min-w-[80px] text-center">
-            {visibleStart + 1}–{visibleEnd} of {totalDates}
+          <span className="text-sm text-gray-500 min-w-[100px] text-center">
+            {currentPageStart && format(currentPageStart, viewMode === 'week' ? 'MMM d' : 'MMMM yyyy')}
           </span>
           <button
             type="button"
