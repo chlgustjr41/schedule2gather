@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useEventStore } from '@/stores/eventStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -8,6 +8,7 @@ import AvailabilityGrid from '@/components/AvailabilityGrid'
 import EventNotFound from '@/components/EventNotFound'
 import HostBadge from '@/components/HostBadge'
 import ShareLinkBanner from '@/components/ShareLinkBanner'
+import TimezonePicker from '@/components/TimezonePicker'
 
 type NamePromptState = { show: false } | { show: true; priorNames: string[]; error: string | null }
 
@@ -21,7 +22,9 @@ export default function EventPage() {
   const loadEvent = useEventStore((s) => s.loadEvent)
   const joinAs = useEventStore((s) => s.joinAs)
   const reset = useEventStore((s) => s.reset)
-  const viewerTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const [viewerTimezone, setViewerTimezone] = useState<string>(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  )
   // useReducer instead of useState: the project's react-hooks/set-state-in-effect
   // lint rule rejects setState calls inside effects. A reducer dispatch is allowed.
   const [namePrompt, setNamePrompt] = useReducer(
@@ -94,8 +97,11 @@ export default function EventPage() {
           </p>
           {isHost && <div className="mt-2"><HostBadge /></div>}
         </div>
-        <div className="text-sm text-gray-500">
-          {myParticipant ? `Painting as ${myParticipant.name}` : ''}
+        <div className="flex flex-col items-end gap-2">
+          {myParticipant && (
+            <div className="text-sm text-gray-500">Painting as {myParticipant.name}</div>
+          )}
+          <TimezonePicker value={viewerTimezone} onChange={setViewerTimezone} />
         </div>
       </div>
 
