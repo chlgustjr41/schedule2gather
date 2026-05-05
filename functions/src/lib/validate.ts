@@ -20,6 +20,24 @@ export interface CreateEventInput {
   timezone: string
 }
 
+/**
+ * Number of time slots in a single event-day, derived from time range and slot size.
+ * Pure; used by both the handler and the validator's cap check to avoid divergence.
+ */
+export function computeSlotsPerDay(
+  timeRange: { start: number; end: number },
+  slotMinutes: 15 | 30 | 60,
+): number {
+  return (timeRange.end - timeRange.start) * (60 / slotMinutes)
+}
+
+/**
+ * Total slot count across all event days.
+ */
+export function computeSlotCount(input: CreateEventInput): number {
+  return input.dates.length * computeSlotsPerDay(input.timeRange, input.slotMinutes)
+}
+
 function isInteger(n: unknown): n is number {
   return typeof n === 'number' && Number.isInteger(n)
 }
@@ -115,9 +133,8 @@ export function validateCreateEventInput(input: unknown): asserts input is Creat
     throw new ValidationError(`timezone "${i.timezone}" is not a valid IANA timezone`)
   }
 
-  // slotCount cap
-  const slotsPerDay = ((tr.end as number) - (tr.start as number)) * (60 / (i.slotMinutes as number))
-  const slotCount = i.dates.length * slotsPerDay
+  // slotCount cap — uses shared computeSlotCount to avoid divergence with the handler
+  const slotCount = computeSlotCount(input as CreateEventInput)
   if (slotCount > 5000) {
     throw new ValidationError(`slotCount ${slotCount} exceeds cap of 5000`)
   }

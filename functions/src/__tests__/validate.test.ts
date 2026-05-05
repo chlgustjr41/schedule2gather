@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateCreateEventInput, ValidationError } from '../lib/validate'
+import { validateCreateEventInput, ValidationError, computeSlotsPerDay, computeSlotCount } from '../lib/validate'
 
 const validSpecificDates = {
   name: 'Test Event',
@@ -190,5 +190,34 @@ describe('validateCreateEventInput', () => {
         }),
       ).toThrow(ValidationError)
     })
+  })
+})
+
+describe('computeSlotsPerDay', () => {
+  it('30-minute slots from 9 to 17 → 16', () => {
+    expect(computeSlotsPerDay({ start: 9, end: 17 }, 30)).toBe(16)
+  })
+
+  it('15-minute slots from 0 to 24 → 96', () => {
+    expect(computeSlotsPerDay({ start: 0, end: 24 }, 15)).toBe(96)
+  })
+
+  it('60-minute slots from 8 to 12 → 4', () => {
+    expect(computeSlotsPerDay({ start: 8, end: 12 }, 60)).toBe(4)
+  })
+})
+
+describe('computeSlotCount', () => {
+  it('3 dates × 16 slots/day → 48', () => {
+    expect(
+      computeSlotCount({
+        name: 'X',
+        mode: 'specific_dates',
+        dates: ['2026-05-05', '2026-05-06', '2026-05-07'],
+        timeRange: { start: 9, end: 17 },
+        slotMinutes: 30,
+        timezone: 'UTC',
+      }),
+    ).toBe(48)
   })
 })

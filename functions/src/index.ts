@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import { initializeApp } from 'firebase-admin/app'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
 import { mintSlug } from './lib/slug'
-import { validateCreateEventInput, ValidationError } from './lib/validate'
+import { validateCreateEventInput, ValidationError, computeSlotCount } from './lib/validate'
 
 initializeApp()
 
@@ -27,8 +27,7 @@ export const createEvent = onCall(
     }
     // After validateCreateEventInput, `input` is narrowed to CreateEventInput.
 
-    const slotsPerDay = (input.timeRange.end - input.timeRange.start) * (60 / input.slotMinutes)
-    const slotCount = input.dates.length * slotsPerDay
+    const slotCount = computeSlotCount(input)
 
     const db = getFirestore()
 
