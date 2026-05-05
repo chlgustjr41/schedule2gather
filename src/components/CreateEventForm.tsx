@@ -2,9 +2,19 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/style.css'
-import { format, eachDayOfInterval, startOfMonth, endOfMonth, addMonths } from 'date-fns'
+import {
+  format,
+  eachDayOfInterval,
+  startOfMonth,
+  endOfMonth,
+  addMonths,
+  startOfDay,
+  getDay,
+} from 'date-fns'
 import { createEvent } from '@/services/eventService'
 import { COMMON_TIMEZONES, detectTimezone, formatTimezoneLabel } from '@/lib/timezones'
+
+type DayCategory = 'all' | 'weekdays' | 'weekends'
 
 export default function CreateEventForm() {
   const navigate = useNavigate()
@@ -19,7 +29,7 @@ export default function CreateEventForm() {
   const [timezone, setTimezone] = useState(detectedTz)
   const [selectedDates, setSelectedDates] = useState<Date[]>([])
 
-  const today = useMemo(() => new Date(), [])
+  const today = useMemo(() => startOfDay(new Date()), [])
   const nextMonth = useMemo(() => addMonths(today, 1), [today])
 
   const tzOptions = useMemo(() => {
@@ -28,15 +38,26 @@ export default function CreateEventForm() {
     return [detectedTz, ...tzs]
   }, [detectedTz])
 
-  const selectAllInMonth = (anchor: Date) => {
-    const days = eachDayOfInterval({
+  const selectInMonth = (anchor: Date, category: DayCategory) => {
+    const allDays = eachDayOfInterval({
       start: startOfMonth(anchor),
       end: endOfMonth(anchor),
     })
+    const isWeekend = (d: Date) => {
+      const dow = getDay(d)
+      return dow === 0 || dow === 6
+    }
+    const filtered = allDays
+      .filter((d) => d >= today)
+      .filter((d) => {
+        if (category === 'all') return true
+        if (category === 'weekdays') return !isWeekend(d)
+        return isWeekend(d)
+      })
     setSelectedDates((prev) => {
       const existing = new Set(prev.map((d) => d.toDateString()))
       const merged = [...prev]
-      for (const d of days) {
+      for (const d of filtered) {
         if (!existing.has(d.toDateString())) merged.push(d)
       }
       return merged
@@ -71,41 +92,60 @@ export default function CreateEventForm() {
     }
   }
 
+  const renderQuickRow = (anchor: Date) => (
+    <div key={anchor.getTime()} className="flex items-center gap-2 text-xs">
+      <span className="text-gray-500 w-16 shrink-0">{format(anchor, 'MMMM')}:</span>
+      <button
+        type="button"
+        onClick={() => selectInMonth(anchor, 'all')}
+        className="text-indigo-600 hover:text-indigo-700 underline"
+      >
+        All
+      </button>
+      <button
+        type="button"
+        onClick={() => selectInMonth(anchor, 'weekdays')}
+        className="text-indigo-600 hover:text-indigo-700 underline"
+      >
+        Weekdays
+      </button>
+      <button
+        type="button"
+        onClick={() => selectInMonth(anchor, 'weekends')}
+        className="text-indigo-600 hover:text-indigo-700 underline"
+      >
+        Weekends
+      </button>
+    </div>
+  )
+
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl mx-auto p-6 space-y-5">
+    <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-5">
       <div>
         <label className="block text-sm font-medium mb-2">When could the event happen?</label>
-        <div className="flex gap-2 mb-2">
-          <button
-            type="button"
-            onClick={() => selectAllInMonth(today)}
-            className="text-xs text-indigo-600 hover:text-indigo-700 underline"
-          >
-            Select all of {format(today, 'MMMM')}
-          </button>
-          <button
-            type="button"
-            onClick={() => selectAllInMonth(nextMonth)}
-            className="text-xs text-indigo-600 hover:text-indigo-700 underline"
-          >
-            Select all of {format(nextMonth, 'MMMM')}
-          </button>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mb-3">
+          {renderQuickRow(today)}
+          {renderQuickRow(nextMonth)}
           {selectedDates.length > 0 && (
             <button
               type="button"
               onClick={() => setSelectedDates([])}
               className="text-xs text-gray-500 hover:text-gray-700 underline ml-auto"
             >
-              Clear
+              Clear all
             </button>
           )}
         </div>
-        <DayPicker
-          mode="multiple"
-          numberOfMonths={2}
-          selected={selectedDates}
-          onSelect={(dates) => setSelectedDates(dates ?? [])}
-        />
+        <div className="rdp-side-by-side">
+          <DayPicker
+            mode="multiple"
+            numberOfMonths={2}
+            selected={selectedDates}
+            onSelect={(dates) => setSelectedDates(dates ?? [])}
+            disabled={{ before: today }}
+            startMonth={today}
+          />
+        </div>
         <p className="mt-1 text-xs text-gray-500">{selectedDates.length} selected</p>
       </div>
 

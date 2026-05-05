@@ -18,3 +18,10 @@ body {
   background-color: #f9fafb;
   color: #111827;
 }
+
+/* Force react-day-picker months to render side-by-side (overrides the default flex-wrap). */
+.rdp-side-by-side .rdp-months {
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 1.5rem;
+}
