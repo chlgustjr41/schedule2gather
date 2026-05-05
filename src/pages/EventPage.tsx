@@ -7,6 +7,7 @@ import NamePrompt from '@/components/NamePrompt'
 import AvailabilityGrid from '@/components/AvailabilityGrid'
 import EventNotFound from '@/components/EventNotFound'
 import HostBadge from '@/components/HostBadge'
+import ShareLinkBanner from '@/components/ShareLinkBanner'
 
 type NamePromptState = { show: false } | { show: true; priorNames: string[] }
 
@@ -61,8 +62,11 @@ export default function EventPage() {
     setNamePrompt({ show: false })
   }
 
+  const shareUrl = `${window.location.origin}/e/${slug}`
+
   return (
     <div className="min-h-screen p-4">
+      <ShareLinkBanner url={shareUrl} />
       <div className="flex items-center justify-between max-w-5xl mx-auto mb-4">
         <div>
           <h1 className="text-2xl font-semibold">{event.name}</h1>

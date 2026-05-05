@@ -28,6 +28,7 @@ _(empty)_
 
 ## Beyond launch
 
+- Days-of-week event mode (recurring or within range) — deprioritized from P1 per UX simplification. The Cloud Function already validates all three modes; re-adding the client UI is straightforward when the recurring-meeting use case becomes a priority.
 - Magic-link return-edit for participants/hosts.
 - Live editor avatars (showing who's currently painting).
 - Optional Google Calendar one-way overlay ("show my busy times").

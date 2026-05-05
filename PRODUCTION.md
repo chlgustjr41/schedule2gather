@@ -273,7 +273,7 @@ Total target: **~5 weeks solo** to reach the Phase 5 / "polished launch" bar.
 **Goal:** Single-TZ, 2-state, desktop-only end-to-end working app.
 
 **In scope:**
-- Event creation form (specific dates *or* days-of-week mode; time range; slot size; name).
+- Event creation form (specific dates only — see late-P1 refinement note); time range; slot size; name; curated timezone dropdown with auto-detect.
 - `createEvent` Cloud Function (validate input, mint 6-char slug with collision retry, write doc).
 - `/e/{slug}` landing → name prompt → grid renders.
 - Desktop drag-paint engine (mouse only, 2-state Available / Unavailable).
@@ -286,6 +286,8 @@ Total target: **~5 weeks solo** to reach the Phase 5 / "polished launch" bar.
 **Out of scope:** Per-participant TZ, mobile/touch, undo/redo, best-slot ranking, export, Google sign-in, 3-state, PWA, accessibility polish.
 
 **Done when:** Two desktop browsers, two participants — both paint, both see the live aggregate update.
+
+**Late-P1 refinement note:** The days-of-week event modes (`weekdays_recurring` and `weekdays_in_range`) were dropped from the client during P1 to keep the create-event experience simple and fast. The "spontaneous quick scheduling" use case doesn't need recurring-meeting patterns; those belong more to calendar tools. The Cloud Function still validates all three modes, so re-adding them later is trivial. Days-of-week mode moved to "Beyond launch" in BACKLOG.md. The form was also improved with a dual-month calendar, quick "select all month" buttons, a curated timezone dropdown with auto-detect, and a ShareLinkBanner on the event page.
 
 ### Phase 2 — Real users, real zones (~1 week)
 

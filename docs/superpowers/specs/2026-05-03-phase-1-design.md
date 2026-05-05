@@ -20,6 +20,19 @@
 | Slug minting | 6 chars from `abcdefghijkmnpqrstuvwxyz23456789` (32 look-alike-free chars), retry ≤5× on collision | ~1B combos; readable aloud |
 | Bitmap encoding | 1 bit per slot, MSB-first within byte, base64 wire format | Tight; 168-slot event = 21 bytes payload |
 
+## 1a. P1 implementation refinements (late-P1 UX simplification)
+
+After the initial implementation, the create-event experience was simplified based on the observation that the app targets spontaneous quick scheduling, not recurring meetings. These changes were made without modifying the Cloud Function or Firestore validation (all three modes remain valid server-side).
+
+| Change | Detail |
+|---|---|
+| Dropped weekdays_recurring and weekdays_in_range modes from client | The tab UI, weekday checkboxes, and recurring/in-range sub-toggle were removed. The form always sends `mode: 'specific_dates'`. Days-of-week pattern moved to "Beyond launch" (see BACKLOG.md). |
+| Dual-month calendar | DayPicker now shows `numberOfMonths={2}` (current + next month) side by side. |
+| Quick "select all month" actions | Two helper buttons above the calendar let users select every day of a given month in one click, using `eachDayOfInterval` + `startOfMonth`/`endOfMonth`. |
+| Timezone as curated dropdown with auto-detect | Free-form text input replaced with a `<select>` of 25 common IANA zones. Auto-detects via `Intl.DateTimeFormat().resolvedOptions().timeZone`; a "Detect" button resets to it. If the detected zone isn't in the curated list, it appears as an extra option at the top. |
+| Simplified form layout | Date selection leads, followed by time range + slot + timezone, then event name. No tabs, no wasted vertical space. |
+| ShareLinkBanner on EventPage | A prominent banner at `/e/{slug}` shows the full share URL with a "Copy link" button (clipboard API, 2-second "Copied!" confirmation). Visible to all visitors so participants can also share. |
+
 ---
 
 ## 2. Data model
