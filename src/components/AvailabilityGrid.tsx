@@ -56,6 +56,38 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
 
   const myDisplayBits = draftBits ?? myCommittedBits
 
+  const toggleColumn = async (dateIdx: number) => {
+    if (!myCommittedBits) return
+    const startIdx = dateIdx * spd
+    const endIdx = startIdx + spd - 1
+    let anyOff = false
+    for (let i = startIdx; i <= endIdx; i++) {
+      if (!myCommittedBits[i]) {
+        anyOff = true
+        break
+      }
+    }
+    const value = anyOff
+    const next = [...myCommittedBits]
+    for (let i = startIdx; i <= endIdx; i++) next[i] = value
+    await updateMyAvailability(pack(next))
+  }
+
+  const toggleRow = async (timeIdx: number) => {
+    if (!myCommittedBits || !event) return
+    let anyOff = false
+    for (let d = 0; d < event.dates.length; d++) {
+      if (!myCommittedBits[d * spd + timeIdx]) {
+        anyOff = true
+        break
+      }
+    }
+    const value = anyOff
+    const next = [...myCommittedBits]
+    for (let d = 0; d < event.dates.length; d++) next[d * spd + timeIdx] = value
+    await updateMyAvailability(pack(next))
+  }
+
   const handlePointerDown = (slotIdx: number) => (e: React.PointerEvent) => {
     e.preventDefault()
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
@@ -64,7 +96,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
 
   const handlePointerEnter = (slotIdx: number) => () => {
     if (draftBits) {
-      dragTo(slotIdx, myCommittedBits, spd)
+      dragTo(slotIdx, myCommittedBits)
     } else {
       setTooltipSlot(slotIdx)
     }
@@ -82,9 +114,9 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   }
 
   return (
-    <div className="overflow-auto p-4">
+    <div className="overflow-auto p-4 flex justify-center">
       <table
-        className="border-collapse select-none"
+        className="border-collapse select-none mx-auto"
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
@@ -92,7 +124,12 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
           <tr>
             <th className="w-20"></th>
             {event.dates.map((d, dateIdx) => (
-              <th key={d} className="p-2 text-sm font-medium">
+              <th
+                key={d}
+                onClick={() => void toggleColumn(dateIdx)}
+                className="p-2 text-sm font-medium cursor-pointer select-none hover:bg-gray-50"
+                title="Click to toggle this entire column"
+              >
                 {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
               </th>
             ))}
@@ -101,7 +138,11 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
         <tbody>
           {Array.from({ length: spd }).map((_, timeIdx) => (
             <tr key={timeIdx}>
-              <td className="text-xs text-gray-500 pr-2 align-top">
+              <td
+                onClick={() => void toggleRow(timeIdx)}
+                className="text-xs text-gray-500 pr-2 align-top cursor-pointer select-none hover:text-gray-700"
+                title="Click to toggle this entire row"
+              >
                 {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
                 {formatSlotTimeLabel(event, timeIdx, viewerTimezone)}
               </td>
