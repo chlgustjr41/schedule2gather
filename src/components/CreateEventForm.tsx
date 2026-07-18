@@ -1,21 +1,32 @@
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/style.css'
 import {
-  format,
-  eachDayOfInterval,
-  startOfMonth,
-  endOfMonth,
   addMonths,
-  startOfDay,
+  eachDayOfInterval,
+  endOfMonth,
+  format,
   getDay,
+  startOfDay,
+  startOfMonth,
 } from 'date-fns'
 import { createEvent } from '@/services/eventService'
 import { COMMON_TIMEZONES, detectTimezone, formatTimezoneLabel } from '@/lib/timezones'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import Button from '@/components/ui/Button'
+import Card from '@/components/ui/Card'
+import SegmentedControl from '@/components/ui/SegmentedControl'
+import TextField from '@/components/ui/TextField'
 
 type DayCategory = 'all' | 'weekdays' | 'weekends'
+
+function formatHour(h: number): string {
+  const norm = h % 24
+  const suffix = norm < 12 ? 'AM' : 'PM'
+  const display = norm % 12 === 0 ? 12 : norm % 12
+  return `${display} ${suffix}`
+}
 
 export default function CreateEventForm() {
   const navigate = useNavigate()
@@ -25,11 +36,12 @@ export default function CreateEventForm() {
 
   const [name, setName] = useState('')
   const [startHour, setStartHour] = useState(9)
-  const [endHour, setEndHour] = useState(17)
+  const [endHour, setEndHour] = useState(21)
   const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(30)
   const detectedTz = useMemo(() => detectTimezone(), [])
   const [timezone, setTimezone] = useState(detectedTz)
   const [selectedDates, setSelectedDates] = useState<Date[]>([])
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   const today = useMemo(() => startOfDay(new Date()), [])
   const nextMonth = useMemo(() => addMonths(today, 1), [today])
@@ -41,10 +53,7 @@ export default function CreateEventForm() {
   }, [detectedTz])
 
   const selectInMonth = (anchor: Date, category: DayCategory) => {
-    const allDays = eachDayOfInterval({
-      start: startOfMonth(anchor),
-      end: endOfMonth(anchor),
-    })
+    const allDays = eachDayOfInterval({ start: startOfMonth(anchor), end: endOfMonth(anchor) })
     const isWeekend = (d: Date) => {
       const dow = getDay(d)
       return dow === 0 || dow === 6
@@ -96,35 +105,41 @@ export default function CreateEventForm() {
 
   const renderQuickRow = (anchor: Date) => (
     <div key={anchor.getTime()} className="flex items-center gap-2 text-xs">
-      <span className="text-gray-500 w-16 shrink-0">{format(anchor, 'MMMM')}:</span>
-      <button
-        type="button"
-        onClick={() => selectInMonth(anchor, 'all')}
-        className="text-indigo-600 hover:text-indigo-700 underline"
-      >
-        All
-      </button>
-      <button
-        type="button"
-        onClick={() => selectInMonth(anchor, 'weekdays')}
-        className="text-indigo-600 hover:text-indigo-700 underline"
-      >
-        Weekdays
-      </button>
-      <button
-        type="button"
-        onClick={() => selectInMonth(anchor, 'weekends')}
-        className="text-indigo-600 hover:text-indigo-700 underline"
-      >
-        Weekends
-      </button>
+      <span className="text-ink-muted w-16 shrink-0">{format(anchor, 'MMMM')}:</span>
+      {(['all', 'weekdays', 'weekends'] as const).map((cat) => (
+        <button
+          key={cat}
+          type="button"
+          onClick={() => selectInMonth(anchor, cat)}
+          className="text-primary font-bold hover:underline capitalize"
+        >
+          {cat}
+        </button>
+      ))}
     </div>
   )
 
+  const summaryLabel = `${formatHour(startHour)} – ${formatHour(endHour)} · ${slotMinutes} min · ${
+    timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone
+  }`
+
+  const hourSelectClass =
+    'w-full bg-raised border-[1.5px] border-line rounded-[12px] px-3 py-2 text-sm text-ink'
+
   return (
-    <form onSubmit={handleSubmit} className="max-w-4xl mx-auto p-6 space-y-5">
-      <div>
-        <label className="block text-sm font-medium mb-2">When could the event happen?</label>
+    <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+      <TextField
+        id="event-name"
+        label="What’s the occasion?"
+        type="text"
+        required
+        maxLength={80}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Pizza night, team sync, book club…"
+      />
+
+      <Card>
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-x-6 gap-y-2 mb-3">
           {renderQuickRow(today)}
           {renderQuickRow(nextMonth)}
@@ -132,7 +147,7 @@ export default function CreateEventForm() {
             <button
               type="button"
               onClick={() => setSelectedDates([])}
-              className="text-xs text-gray-500 hover:text-gray-700 underline sm:ml-auto self-start sm:self-auto"
+              className="text-xs text-ink-muted hover:text-ink underline sm:ml-auto self-start sm:self-auto"
             >
               Clear all
             </button>
@@ -148,94 +163,76 @@ export default function CreateEventForm() {
             startMonth={today}
           />
         </div>
-        <p className="mt-1 text-xs text-gray-500">{selectedDates.length} selected</p>
+        <p className="mt-1 text-xs text-ink-muted">{selectedDates.length} selected</p>
+      </Card>
+
+      <div className="bg-line/40 rounded-[12px]">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((v) => !v)}
+          aria-expanded={advancedOpen}
+          className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-bold text-ink-muted"
+        >
+          <span>⚙ {summaryLabel}</span>
+          <span aria-hidden="true">{advancedOpen ? '▴' : '▾'}</span>
+        </button>
+        {advancedOpen && (
+          <div className="px-4 pb-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="start-hour" className="block text-xs font-bold text-ink-muted mb-1">Earliest</label>
+                <select id="start-hour" value={startHour} onChange={(e) => setStartHour(Number(e.target.value))} className={hourSelectClass}>
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>{formatHour(h)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="end-hour" className="block text-xs font-bold text-ink-muted mb-1">Latest</label>
+                <select id="end-hour" value={endHour} onChange={(e) => setEndHour(Number(e.target.value))} className={hourSelectClass}>
+                  {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => (
+                    <option key={h} value={h}>{formatHour(h)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
+              <SegmentedControl
+                options={[
+                  { value: '15', label: '15 min' },
+                  { value: '30', label: '30 min' },
+                  { value: '60', label: '1 hour' },
+                ]}
+                value={String(slotMinutes) as '15' | '30' | '60'}
+                onChange={(v) => setSlotMinutes(Number(v) as 15 | 30 | 60)}
+              />
+            </div>
+            <div>
+              <label htmlFor="event-tz" className="block text-xs font-bold text-ink-muted mb-1">Time zone</label>
+              <div className="flex gap-2">
+                <select id="event-tz" value={timezone} onChange={(e) => setTimezone(e.target.value)} className={hourSelectClass}>
+                  {tzOptions.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {formatTimezoneLabel(tz)}
+                      {tz === detectedTz ? ' — your timezone' : ''}
+                    </option>
+                  ))}
+                </select>
+                <Button variant="secondary" size="sm" type="button" onClick={() => setTimezone(detectedTz)}>
+                  Detect
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="block text-sm font-medium">From (hour)</label>
-          <input
-            type="number"
-            min={0}
-            max={23}
-            value={startHour}
-            onChange={(e) => setStartHour(Number(e.target.value))}
-            className="mt-1 w-full border rounded px-3 py-2"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium">To (hour)</label>
-          <input
-            type="number"
-            min={1}
-            max={24}
-            value={endHour}
-            onChange={(e) => setEndHour(Number(e.target.value))}
-            className="mt-1 w-full border rounded px-3 py-2"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium">Slot</label>
-          <select
-            value={slotMinutes}
-            onChange={(e) => setSlotMinutes(Number(e.target.value) as 15 | 30 | 60)}
-            className="mt-1 w-full border rounded px-3 py-2"
-          >
-            <option value={15}>15 min</option>
-            <option value={30}>30 min</option>
-            <option value={60}>1 hour</option>
-          </select>
-        </div>
-      </div>
+      {error && <p className="text-danger text-sm">{error}</p>}
 
-      <div>
-        <label className="block text-sm font-medium">Time zone</label>
-        <div className="flex gap-2 mt-1">
-          <select
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-            className="flex-1 border rounded px-3 py-2"
-          >
-            {tzOptions.map((tz) => (
-              <option key={tz} value={tz}>
-                {formatTimezoneLabel(tz)}
-                {tz === detectedTz ? ' — your timezone' : ''}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => setTimezone(detectedTz)}
-            className="text-sm border rounded px-3 py-2 hover:bg-gray-50"
-            title="Reset to auto-detected timezone"
-          >
-            Detect
-          </button>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium">Event name</label>
-        <input
-          type="text"
-          required
-          maxLength={80}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="mt-1 w-full border rounded px-3 py-2"
-          placeholder="Coffee with the team"
-        />
-      </div>
-
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full bg-indigo-600 text-white py-3 rounded font-medium hover:bg-indigo-700 disabled:opacity-50"
-      >
+      <Button size="lg" type="submit" disabled={submitting}>
         {submitting ? 'Creating…' : 'Create event'}
-      </button>
+      </Button>
     </form>
   )
 }
