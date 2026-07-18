@@ -4,9 +4,9 @@ interface CellTooltipProps {
 
 export default function CellTooltip({ names }: CellTooltipProps) {
   return (
-    <div className="absolute z-30 left-full top-0 ml-2 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none">
+    <div className="absolute z-30 left-full top-0 ml-2 bg-ink text-canvas text-xs rounded-[8px] px-2 py-1 whitespace-nowrap pointer-events-none">
       {names.length === 0 ? (
-        <span className="text-gray-400">No one available</span>
+        <span className="text-canvas/60">No one available</span>
       ) : (
         <ul>
           {names.map((n) => (

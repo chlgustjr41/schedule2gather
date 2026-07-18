@@ -8,6 +8,10 @@ import { formatSlotDateLabel, formatSlotTimeLabel } from '@/lib/timezoneSlots'
 import { getMonthPages, getVisibleColumns, getWeekPages, type CalendarColumn } from '@/lib/calendarPages'
 import CellTooltip from '@/components/CellTooltip'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useMinWidth } from '@/hooks/useMinWidth'
+import { heatColor, mineColor } from '@/lib/heatColor'
+import Button from '@/components/ui/Button'
+import SegmentedControl from '@/components/ui/SegmentedControl'
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
 const UNDO_HOTKEY_LABEL = IS_MAC ? '⌘Z' : 'Ctrl+Z'
@@ -36,6 +40,8 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   const isMobile = useIsMobile()
   const [pageSize, setPageSize] = useState<7 | 31>(7)
   const [pageIdx, setPageIdx] = useState(0)
+  const [layer, setLayer] = useState<'mine' | 'group'>('mine')
+  const dualGrid = useMinWidth(1024)
   // Track previous participantId to reset stacks when participant changes (render-phase pattern)
   const prevParticipantIdRef = useRef<string | undefined>(undefined)
   const currentParticipantId = myParticipant?.participantId
@@ -353,194 +359,206 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     }
   }
 
-  return (
-    <div className="p-4">
-      <div className="flex justify-center gap-1 sm:gap-2 mb-3 flex-wrap">
-        {isMobile && (
-          <div className="flex rounded border border-gray-300 overflow-hidden text-sm">
-            <button
-              type="button"
-              onClick={() => { setPageSize(7); setPageIdx(0) }}
-              className={
-                pageSize === 7
-                  ? 'bg-indigo-600 text-white px-3 py-1'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 px-3 py-1'
-              }
-              aria-pressed={pageSize === 7}
-            >
-              Week
-            </button>
-            <button
-              type="button"
-              onClick={() => { setPageSize(31); setPageIdx(0) }}
-              className={
-                pageSize === 31
-                  ? 'bg-indigo-600 text-white px-3 py-1'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 px-3 py-1'
-              }
-              aria-pressed={pageSize === 31}
-            >
-              Month
-            </button>
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => void setAllAvailable()}
-          className="text-sm border border-indigo-300 text-indigo-700 hover:bg-indigo-50 rounded px-3 py-1"
-        >
-          Mark all available
-        </button>
-        <button
-          type="button"
-          onClick={() => void setAllUnavailable()}
-          className="text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 rounded px-3 py-1"
-        >
-          Clear all
-        </button>
-        <button
-          type="button"
-          onClick={() => void undo()}
-          disabled={undoStack.length === 0}
-          title={`Undo (${UNDO_HOTKEY_LABEL})`}
-          aria-label={`Undo (${UNDO_HOTKEY_LABEL})`}
-          className="text-sm border border-gray-300 text-gray-700 hover:bg-gray-50 rounded px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          ↶ Undo
-        </button>
-        <button
-          type="button"
-          onClick={() => void redo()}
-          disabled={redoStack.length === 0}
-          title={`Redo (${REDO_HOTKEY_LABEL})`}
-          aria-label={`Redo (${REDO_HOTKEY_LABEL})`}
-          className="text-sm border border-gray-300 text-gray-700 hover:bg-gray-50 rounded px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Redo ↷
-        </button>
-      </div>
-      <div className={scrollableMonth ? 'overflow-x-auto' : 'overflow-auto flex justify-center'}>
-      <table
-        ref={tableRef}
-        role="grid"
-        aria-label={event ? `Availability grid for ${event.name}` : 'Availability grid'}
-        aria-rowcount={spd + 1}
-        aria-colcount={event ? event.dates.length + 1 : 0}
-        className={`border-collapse select-none ${scrollableMonth ? '' : 'mx-auto'}`}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onKeyDown={handleGridKeyDown}
-      >
-        <thead>
-          <tr role="row">
-            <th
-              className={`w-20 ${stickyTimeColumn ? 'sticky left-0 bg-white z-10' : ''}`}
-              aria-hidden="true"
-            ></th>
-            {visibleColumns.map((col) => {
-              if (col.eventDateIdx === -1) {
-                return (
-                  <th
-                    key={col.dateStr}
-                    role="columnheader"
-                    scope="col"
-                    className="p-2 text-sm font-medium text-gray-300 select-none"
-                  >
-                    {format(col.date, 'EEE d')}
-                  </th>
-                )
-              }
-              const dateIdx = col.eventDateIdx
+  const renderTable = (tableLayer: 'mine' | 'group', interactive: boolean) => (
+    <table
+      ref={interactive ? tableRef : undefined}
+      role="grid"
+      aria-label={`${tableLayer === 'mine' ? 'My availability' : 'Group availability'} for ${event.name}`}
+      aria-rowcount={spd + 1}
+      aria-colcount={event.dates.length + 1}
+      className={`border-collapse select-none ${scrollableMonth ? '' : 'mx-auto'}`}
+      onPointerMove={interactive ? handlePointerMove : undefined}
+      onPointerUp={interactive ? handlePointerUp : undefined}
+      onPointerCancel={interactive ? handlePointerUp : undefined}
+      onKeyDown={interactive ? handleGridKeyDown : undefined}
+    >
+      <thead>
+        <tr role="row">
+          <th
+            className={`w-20 ${stickyTimeColumn ? 'sticky left-0 bg-canvas z-10' : ''}`}
+            aria-hidden="true"
+          ></th>
+          {visibleColumns.map((col) => {
+            if (col.eventDateIdx === -1) {
               return (
                 <th
                   key={col.dateStr}
                   role="columnheader"
                   scope="col"
-                  onClick={() => void toggleColumn(dateIdx)}
-                  className="p-2 text-sm font-medium cursor-pointer select-none hover:bg-gray-50"
-                  title="Click to toggle this entire column"
+                  className="p-2 text-sm font-medium text-ink-muted/50 select-none"
                 >
-                  {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
+                  {format(col.date, 'EEE d')}
                 </th>
+              )
+            }
+            const dateIdx = col.eventDateIdx
+            return (
+              <th
+                key={col.dateStr}
+                role="columnheader"
+                scope="col"
+                onClick={interactive ? () => void toggleColumn(dateIdx) : undefined}
+                className={`p-2 text-sm font-medium select-none ${interactive ? 'cursor-pointer hover:bg-raised' : ''}`}
+                title={interactive ? 'Click to toggle this entire column' : undefined}
+              >
+                {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
+              </th>
+            )
+          })}
+        </tr>
+      </thead>
+      <tbody>
+        {Array.from({ length: spd }).map((_, timeIdx) => (
+          <tr key={timeIdx} role="row">
+            <td
+              role="rowheader"
+              scope="row"
+              onClick={interactive ? () => void toggleRow(timeIdx) : undefined}
+              className={`text-xs text-ink-muted pr-2 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-canvas z-10' : ''}`}
+              title={interactive ? 'Click to toggle this entire row' : undefined}
+            >
+              {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
+              {formatSlotTimeLabel(event, timeIdx, viewerTimezone)}
+            </td>
+            {visibleColumns.map((col) => {
+              if (col.eventDateIdx === -1) {
+                // Greyed out-of-range cell
+                return (
+                  <td
+                    key={`${col.dateStr}-${timeIdx}`}
+                    aria-disabled="true"
+                    className="w-12 h-6 border border-line bg-line/40"
+                  />
+                )
+              }
+              const dateIdx = col.eventDateIdx
+              const slotIdx = dateIdx * spd + timeIdx
+              const mine = myDisplayBits[slotIdx]
+              const count = aggregateCounts[slotIdx]
+              const bg = tableLayer === 'mine' ? mineColor(mine) : heatColor(count, participants.length)
+              return (
+                <td
+                  key={slotIdx}
+                  role="gridcell"
+                  tabIndex={interactive && slotIdx === focusedSlot ? 0 : -1}
+                  aria-selected={tableLayer === 'mine' ? mine : undefined}
+                  aria-label={`${formatSlotDateLabel(event, dateIdx, viewerTimezone)} ${formatSlotTimeLabel(event, timeIdx, viewerTimezone)} — ${tableLayer === 'mine' ? (mine ? 'available' : 'unavailable') : `${count} of ${participants.length} available`}`}
+                  data-slot-idx={interactive ? slotIdx : undefined}
+                  onFocus={interactive ? () => setFocusedSlot(slotIdx) : undefined}
+                  onPointerDown={interactive ? handlePointerDown(slotIdx) : undefined}
+                  onPointerEnter={interactive ? handlePointerEnter(slotIdx) : () => setTooltipSlot(slotIdx)}
+                  onPointerLeave={handlePointerLeave}
+                  style={{
+                    backgroundColor: bg,
+                    touchAction: interactive && effectivePaintMode ? 'none' : 'auto',
+                  }}
+                  className="w-12 h-6 border border-line cursor-pointer relative focus:outline-2 focus:outline-primary focus:outline-offset-[-2px]"
+                >
+                  {tableLayer === 'group' && tooltipSlot === slotIdx && !draftBits && (
+                    <CellTooltip
+                      names={participants.filter((p) => unpack(p.availability, event.slotCount)[slotIdx]).map((p) => p.name)}
+                    />
+                  )}
+                </td>
               )
             })}
           </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: spd }).map((_, timeIdx) => (
-            <tr key={timeIdx} role="row">
-              <td
-                role="rowheader"
-                scope="row"
-                onClick={() => void toggleRow(timeIdx)}
-                className={`text-xs text-gray-500 pr-2 align-top cursor-pointer select-none hover:text-gray-700 ${stickyTimeColumn ? 'sticky left-0 bg-white z-10' : ''}`}
-                title="Click to toggle this entire row"
-              >
-                {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
-                {formatSlotTimeLabel(event, timeIdx, viewerTimezone)}
-              </td>
-              {visibleColumns.map((col) => {
-                if (col.eventDateIdx === -1) {
-                  // Greyed out-of-range cell
-                  return (
-                    <td
-                      key={`${col.dateStr}-${timeIdx}`}
-                      aria-disabled="true"
-                      className="w-12 h-6 border border-gray-200 bg-gray-100"
-                    />
-                  )
-                }
-                const dateIdx = col.eventDateIdx
-                const slotIdx = dateIdx * spd + timeIdx
-                const mine = myDisplayBits[slotIdx]
-                const count = aggregateCounts[slotIdx]
-                const intensity = participants.length > 0 ? count / participants.length : 0
-                const bg = mine
-                  ? '#4f46e5'
-                  : `rgba(34, 197, 94, ${0.15 + intensity * 0.6})`
-                return (
-                  <td
-                    key={slotIdx}
-                    role="gridcell"
-                    tabIndex={slotIdx === focusedSlot ? 0 : -1}
-                    aria-selected={mine}
-                    aria-label={`${formatSlotDateLabel(event, dateIdx, viewerTimezone)} ${formatSlotTimeLabel(event, timeIdx, viewerTimezone)} — ${mine ? 'available' : 'unavailable'}`}
-                    data-slot-idx={slotIdx}
-                    onFocus={() => setFocusedSlot(slotIdx)}
-                    onPointerDown={handlePointerDown(slotIdx)}
-                    onPointerEnter={handlePointerEnter(slotIdx)}
-                    onPointerLeave={handlePointerLeave}
-                    style={{
-                      backgroundColor: bg,
-                      touchAction: effectivePaintMode ? 'none' : 'auto',
-                    }}
-                    className="w-12 h-6 border border-gray-200 cursor-pointer relative focus:outline-2 focus:outline-indigo-500 focus:outline-offset-[-2px]"
-                  >
-                    {tooltipSlot === slotIdx && !draftBits && (
-                      <CellTooltip
-                        names={participants.filter((p) => unpack(p.availability, event.slotCount)[slotIdx]).map((p) => p.name)}
-                      />
-                    )}
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        ))}
+      </tbody>
+    </table>
+  )
+
+  return (
+    <div className="p-4">
+      <div className="flex justify-center gap-1 sm:gap-2 mb-3 flex-wrap">
+        {isMobile && (
+          <SegmentedControl
+            options={[
+              { value: '7', label: 'Week' },
+              { value: '31', label: 'Month' },
+            ]}
+            value={String(pageSize) as '7' | '31'}
+            onChange={(v) => { setPageSize(Number(v) as 7 | 31); setPageIdx(0) }}
+          />
+        )}
+        <Button
+          variant="secondary"
+          size="sm"
+          type="button"
+          onClick={() => void setAllAvailable()}
+        >
+          Mark all available
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          type="button"
+          onClick={() => void setAllUnavailable()}
+        >
+          Clear all
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          type="button"
+          onClick={() => void undo()}
+          disabled={undoStack.length === 0}
+          title={`Undo (${UNDO_HOTKEY_LABEL})`}
+          aria-label={`Undo (${UNDO_HOTKEY_LABEL})`}
+        >
+          ↶ Undo
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          type="button"
+          onClick={() => void redo()}
+          disabled={redoStack.length === 0}
+          title={`Redo (${REDO_HOTKEY_LABEL})`}
+          aria-label={`Redo (${REDO_HOTKEY_LABEL})`}
+        >
+          Redo ↷
+        </Button>
       </div>
+      {dualGrid ? (
+        <div className="flex justify-center gap-10 overflow-x-auto">
+          <div>
+            <div className="text-[10px] font-extrabold uppercase tracking-widest text-ink-muted text-center mb-2">
+              ✏️ My times
+            </div>
+            {renderTable('mine', true)}
+          </div>
+          <div>
+            <div className="text-[10px] font-extrabold uppercase tracking-widest text-ink-muted text-center mb-2">
+              👥 Group
+            </div>
+            {renderTable('group', false)}
+          </div>
+        </div>
+      ) : (
+        <>
+          <SegmentedControl
+            className="max-w-xs mx-auto mb-3"
+            options={[
+              { value: 'mine', label: '✏️ My times' },
+              { value: 'group', label: '👥 Group' },
+            ]}
+            value={layer}
+            onChange={setLayer}
+          />
+          <div className={scrollableMonth ? 'overflow-x-auto' : 'overflow-auto flex justify-center'}>
+            {renderTable(layer, layer === 'mine')}
+          </div>
+        </>
+      )}
       {showPaintToggle && (
         <div className="flex justify-center mt-3">
-          <button
+          <Button
+            variant={paintMode ? 'primary' : 'secondary'}
+            size="sm"
             type="button"
             onClick={() => setPaintMode(!paintMode)}
             aria-pressed={paintMode}
-            className={
-              paintMode
-                ? 'text-sm rounded px-3 py-1 bg-indigo-600 text-white border border-indigo-600 hover:bg-indigo-700'
-                : 'text-sm rounded px-3 py-1 bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }
             title={
               paintMode
                 ? 'Turn off paint mode (touch will scroll the grid)'
@@ -548,36 +566,38 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
             }
           >
             {paintMode ? 'Paint Mode: On' : 'Paint Mode: Off — tap to paint'}
-          </button>
+          </Button>
         </div>
       )}
       {isMobile && totalPages > 1 && (
         <div className="flex justify-center items-center gap-3 mt-3 pb-2">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             type="button"
             onClick={() => setPageIdx((p) => Math.max(0, p - 1))}
             disabled={pageIdx === 0}
-            className="text-sm border border-gray-300 rounded px-3 py-1 hover:bg-gray-50 disabled:opacity-40"
             aria-label="Previous date page"
           >
             ← Prev
-          </button>
-          <span className="text-sm text-gray-500 min-w-[120px] text-center whitespace-nowrap">
+          </Button>
+          <span className="text-sm text-ink-muted min-w-[120px] text-center whitespace-nowrap">
             {currentPageStart && (
               viewMode === 'week'
                 ? `${format(currentPageStart, 'MMM d')} (${safePageIdx + 1}/${totalPages})`
                 : `${format(currentPageStart, 'MMMM yyyy')} (${safePageIdx + 1}/${totalPages})`
             )}
           </span>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             type="button"
             onClick={() => setPageIdx((p) => Math.min(totalPages - 1, p + 1))}
             disabled={pageIdx >= totalPages - 1}
-            className="text-sm border border-gray-300 rounded px-3 py-1 hover:bg-gray-50 disabled:opacity-40"
             aria-label="Next date page"
           >
             Next →
-          </button>
+          </Button>
         </div>
       )}
     </div>
