@@ -546,7 +546,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
             value={layer}
             onChange={setLayer}
           />
-          <div className={scrollableMonth ? 'overflow-x-auto' : 'overflow-auto flex justify-center'}>
+          <div className="overflow-x-auto">
             {renderTable(layer, layer === 'mine')}
           </div>
         </>

@@ -77,8 +77,10 @@ body {
   gap: 1.5rem;
 }
 
-/* react-day-picker accent → terracotta */
-.rdp-root {
+/* react-day-picker accent → terracotta.
+   :root prefix out-specifies the library's own .rdp-root block, which Vite
+   injects AFTER this file (it is imported from the component, not main.tsx). */
+:root .rdp-root {
   --rdp-accent-color: var(--s2g-primary);
   --rdp-accent-background-color: color-mix(in srgb, var(--s2g-primary) 18%, transparent);
 }
