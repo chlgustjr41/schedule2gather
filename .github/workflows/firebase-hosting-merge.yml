@@ -68,6 +68,11 @@ jobs:
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SCHEDULE2GATHER }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx firebase-tools@latest deploy --only functions --project schedule2gather --non-interactive
 
+      - name: Deploy Firestore + RTDB rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: npx firebase-tools@latest deploy --only firestore:rules,database --project schedule2gather --non-interactive
+
       # gen-2 callables sometimes lose the public invoker binding on redeploy via service account.
       # Idempotently re-grant `allUsers: run.invoker` so the function stays publicly callable.
       - uses: google-github-actions/auth@v2

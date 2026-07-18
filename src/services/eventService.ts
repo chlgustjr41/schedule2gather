@@ -1,5 +1,5 @@
 import { httpsCallable, getFunctions, connectFunctionsEmulator, type Functions } from 'firebase/functions'
-import { doc, onSnapshot, setDoc, type Unsubscribe } from 'firebase/firestore'
+import { doc, onSnapshot, setDoc, serverTimestamp, type Unsubscribe } from 'firebase/firestore'
 import { app, db } from '@/services/firebase'
 
 let functionsInstance: Functions | null = null
@@ -35,6 +35,12 @@ export async function createEvent(input: CreateEventInput): Promise<CreateEventR
   return result.data
 }
 
+export interface FinalizedWindow {
+  startSlot: number
+  endSlot: number
+  finalizedAt: { seconds: number; nanoseconds: number }
+}
+
 export interface EventDoc {
   name: string
   createdAt: { seconds: number; nanoseconds: number }
@@ -47,6 +53,8 @@ export interface EventDoc {
   slotMinutes: 15 | 30 | 60
   timezone: string
   slotCount: number
+  finalized?: FinalizedWindow | null
+  lastVisitedAt?: { seconds: number; nanoseconds: number } | null
 }
 
 /**
@@ -66,4 +74,37 @@ export function subscribeToEvent(slug: string, cb: (event: EventDoc | null) => v
 export async function setOwnerEmail(slug: string, email: string): Promise<void> {
   const ref = doc(db, 'events', slug)
   await setDoc(ref, { ownerEmail: email }, { merge: true })
+}
+
+/** Host-only (enforced by rules): lock the vote to a final window. */
+export async function finalizeEvent(
+  slug: string,
+  window: { startSlot: number; endSlot: number },
+): Promise<void> {
+  const ref = doc(db, 'events', slug)
+  await setDoc(ref, { finalized: { ...window, finalizedAt: serverTimestamp() } }, { merge: true })
+}
+
+/** Host-only (enforced by rules): reopen voting. */
+export async function reopenEvent(slug: string): Promise<void> {
+  const ref = doc(db, 'events', slug)
+  await setDoc(ref, { finalized: null }, { merge: true })
+}
+
+const VISIT_THROTTLE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Best-effort visit tracking for garbage collection. Writes at most once per
+ * 24h per event (client-side throttle) and swallows all failures.
+ */
+export async function touchLastVisited(
+  slug: string,
+  current: { seconds: number } | null,
+): Promise<void> {
+  if (current && Date.now() - current.seconds * 1000 < VISIT_THROTTLE_MS) return
+  try {
+    await setDoc(doc(db, 'events', slug), { lastVisitedAt: serverTimestamp() }, { merge: true })
+  } catch {
+    // best-effort — GC falls back to createdAt
+  }
 }
