@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "emulators": "firebase emulators:start --only firestore,auth",
     "emulators:full": "firebase emulators:start --only firestore,auth,functions",
-    "deploy": "firebase deploy --only hosting,firestore:rules,functions",
+    "deploy": "firebase deploy --only hosting,firestore:rules,database,functions",
     "deploy:functions": "cd functions && npm run build && cd .. && firebase deploy --only functions"
   },
   "dependencies": {
