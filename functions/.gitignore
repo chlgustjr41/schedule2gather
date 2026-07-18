@@ -1,4 +1,5 @@
 node_modules/
-lib/
+# Build output only — anchored so src/lib/ stays tracked
+/lib/
 *.log
 .firebase/

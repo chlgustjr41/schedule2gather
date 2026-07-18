@@ -1,6 +1,7 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { logger } from 'firebase-functions/v2'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
+import { shouldDeleteEvent, type GcEvent } from './lib/gc'
 
 /**
  * Scheduled function that runs daily at 03:00 UTC.
@@ -21,14 +22,17 @@ export const cleanupExpiredEvents = onSchedule(
   },
   async () => {
     const db = getFirestore()
-    const now = Timestamp.now()
-    const expiredSnap = await db.collection('events').where('expiresAt', '<', now).get()
+    // Full scan instead of the old expiresAt-only query: the idle rule needs
+    // per-document evaluation. Fine at this scale (see note above).
+    const nowMs = Timestamp.now().toMillis()
+    const allSnap = await db.collection('events').get()
+    const expired = allSnap.docs.filter((d) => shouldDeleteEvent(d.data() as GcEvent, nowMs))
 
-    logger.info(`cleanupExpiredEvents: found ${expiredSnap.size} expired events`)
+    logger.info(`cleanupExpiredEvents: ${expired.length} of ${allSnap.size} events due for deletion`)
 
     let deleted = 0
     let failed = 0
-    for (const eventDoc of expiredSnap.docs) {
+    for (const eventDoc of expired) {
       try {
         // recursiveDelete handles the doc + all subcollections (participants, comments).
         await db.recursiveDelete(eventDoc.ref)
