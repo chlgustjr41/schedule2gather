@@ -55,26 +55,26 @@ export default function SignInButton({ onSignedIn }: SignInButtonProps) {
           type="button"
           onClick={handleSignIn}
           disabled={busy}
-          className="text-sm bg-white border rounded px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
+          className="text-sm bg-surface border rounded-[12px] px-3 py-1 hover:bg-raised disabled:opacity-50"
           title="Sign in with Google to keep ownership across devices"
         >
           {busy ? 'Signing in…' : 'Sign in with Google'}
         </button>
-        {error && <span className="text-xs text-red-600">{error}</span>}
+        {error && <span className="text-xs text-danger">{error}</span>}
       </div>
     )
   }
 
   return (
     <div className="flex items-center gap-2 text-sm">
-      <span className="text-gray-600 truncate max-w-[200px]" title={email ?? ''}>
+      <span className="text-ink-muted truncate max-w-[200px]" title={email ?? ''}>
         {email ?? 'Signed in'}
       </span>
       <button
         type="button"
         onClick={handleSignOut}
         disabled={busy}
-        className="text-xs text-gray-500 hover:text-gray-700 underline disabled:opacity-50"
+        className="text-xs text-ink-muted hover:text-ink-muted underline disabled:opacity-50"
       >
         Sign out
       </button>

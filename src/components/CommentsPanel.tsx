@@ -77,7 +77,7 @@ export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid }
 
   return (
     <section className="max-w-2xl mx-auto mt-8 p-4">
-      <h2 className="text-lg font-semibold mb-3">Comments</h2>
+      <h2 className="text-lg font-extrabold mb-3">Comments</h2>
 
       <form onSubmit={handlePost} className="mb-4">
         <textarea
@@ -87,16 +87,16 @@ export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid }
           rows={2}
           disabled={!myParticipant || posting}
           placeholder={myParticipant ? 'Leave a quick note…' : 'Enter your name to post a comment'}
-          className="w-full border rounded px-3 py-2 text-sm resize-none disabled:bg-gray-50 disabled:text-gray-400"
+          className="w-full border rounded-[12px] px-3 py-2 text-sm resize-none disabled:bg-raised disabled:text-ink-muted"
         />
         <div className="flex items-center justify-between mt-2">
-          <span className="text-xs text-gray-400">{text.length}/500</span>
+          <span className="text-xs text-ink-muted">{text.length}/500</span>
           <div className="flex items-center gap-2">
-            {error && <span className="text-xs text-red-600">{error}</span>}
+            {error && <span className="text-xs text-danger">{error}</span>}
             <button
               type="submit"
               disabled={!myParticipant || posting || text.trim().length === 0}
-              className="text-sm bg-indigo-600 text-white px-4 py-1 rounded hover:bg-indigo-700 disabled:opacity-50"
+              className="text-sm bg-primary text-on-primary px-4 py-1 rounded-[12px] hover:brightness-105 disabled:opacity-50"
             >
               {posting ? 'Posting…' : 'Post'}
             </button>
@@ -105,18 +105,18 @@ export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid }
       </form>
 
       {comments.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-4">No comments yet — say hi!</p>
+        <p className="text-sm text-ink-muted text-center py-4">No comments yet — say hi!</p>
       ) : (
         <ul className="space-y-3">
           {comments.map((c) => {
             const canDelete = isHost || (viewerUid !== null && c.uid === viewerUid)
             return (
-              <li key={c.id} className="bg-white border border-gray-200 rounded p-3">
+              <li key={c.id} className="bg-surface border border-line rounded-[12px] p-3">
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="text-sm font-medium">{c.authorName}</div>
                   <div className="flex items-center gap-2">
                     <span
-                      className="text-xs text-gray-400 whitespace-nowrap"
+                      className="text-xs text-ink-muted whitespace-nowrap"
                       title={formatExactTime(c.createdAt?.seconds)}
                     >
                       {formatRelative(c.createdAt?.seconds)}
@@ -128,7 +128,7 @@ export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid }
                       <button
                         type="button"
                         onClick={() => void handleDelete(c.id)}
-                        className="text-xs text-gray-400 hover:text-red-600"
+                        className="text-xs text-ink-muted hover:text-danger"
                         title="Delete comment"
                       >
                         ×
@@ -136,7 +136,7 @@ export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid }
                     )}
                   </div>
                 </div>
-                <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap break-words">{c.text}</p>
+                <p className="text-sm text-ink-muted mt-1 whitespace-pre-wrap break-words">{c.text}</p>
               </li>
             )
           })}
