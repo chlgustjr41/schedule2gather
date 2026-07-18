@@ -4,7 +4,7 @@ import { useEventStore } from '@/stores/eventStore'
 import { useAuthStore } from '@/stores/authStore'
 import { loadParticipantsForEvent } from '@/lib/participantId'
 import { setOwnerEmail } from '@/services/eventService'
-import NamePrompt from '@/components/NamePrompt'
+import JoinScreen from '@/components/JoinScreen'
 import AvailabilityGrid from '@/components/AvailabilityGrid'
 import EventNotFound from '@/components/EventNotFound'
 import HostBadge from '@/components/HostBadge'
@@ -99,47 +99,45 @@ export default function EventPage() {
 
   return (
     <div className="min-h-screen p-4">
-      <ShareLinkBanner url={shareUrl} />
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between max-w-5xl mx-auto mb-4 gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold break-words">{event.name}</h1>
-          <p className="text-sm text-gray-500">
-            {event.dates.length} {event.mode === 'weekdays_recurring' ? 'weekdays' : 'dates'} ·{' '}
-            {event.timeRange.start}:00–{event.timeRange.end}:00 · {event.slotMinutes} min slots ·{' '}
-            {event.timezone}
-          </p>
-          {isHost && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <HostBadge />
-              <SignInButton onSignedIn={handleHostSignedIn} />
+      {!myParticipant && namePrompt.show ? (
+        <JoinScreen priorNames={namePrompt.priorNames} error={namePrompt.error} onSubmit={handleJoin} />
+      ) : (
+        <>
+          <ShareLinkBanner url={shareUrl} />
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between max-w-5xl mx-auto mb-4 gap-3">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold break-words">{event.name}</h1>
+              <p className="text-sm text-gray-500">
+                {event.dates.length} {event.mode === 'weekdays_recurring' ? 'weekdays' : 'dates'} ·{' '}
+                {event.timeRange.start}:00–{event.timeRange.end}:00 · {event.slotMinutes} min slots ·{' '}
+                {event.timezone}
+              </p>
+              {isHost && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <HostBadge />
+                  <SignInButton onSignedIn={handleHostSignedIn} />
+                </div>
+              )}
             </div>
+            <div className="flex flex-col sm:items-end gap-2 shrink-0">
+              {myParticipant && (
+                <div className="text-sm text-gray-500">Painting as {myParticipant.name}</div>
+              )}
+              <TimezonePicker value={viewerTimezone} onChange={setViewerTimezone} />
+            </div>
+          </div>
+
+          {myParticipant && <AvailabilityGrid viewerTimezone={viewerTimezone} />}
+
+          {slug && (
+            <CommentsPanel
+              slug={slug}
+              myParticipant={myParticipant}
+              isHost={isHost}
+              viewerUid={user?.uid ?? null}
+            />
           )}
-        </div>
-        <div className="flex flex-col sm:items-end gap-2 shrink-0">
-          {myParticipant && (
-            <div className="text-sm text-gray-500">Painting as {myParticipant.name}</div>
-          )}
-          <TimezonePicker value={viewerTimezone} onChange={setViewerTimezone} />
-        </div>
-      </div>
-
-      {myParticipant && <AvailabilityGrid viewerTimezone={viewerTimezone} />}
-
-      {slug && (
-        <CommentsPanel
-          slug={slug}
-          myParticipant={myParticipant}
-          isHost={isHost}
-          viewerUid={user?.uid ?? null}
-        />
-      )}
-
-      {namePrompt.show && (
-        <NamePrompt
-          priorNames={namePrompt.priorNames}
-          error={namePrompt.error}
-          onSubmit={handleJoin}
-        />
+        </>
       )}
     </div>
   )
