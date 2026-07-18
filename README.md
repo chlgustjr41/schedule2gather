@@ -12,6 +12,10 @@ cp .env.example .env   # then fill in Firebase config
 npm run dev
 ```
 
+`.env` needs the full Firebase config, **including `VITE_FIREBASE_DATABASE_URL`** (the Realtime
+Database instance URL). Everything else works without it, but live presence dots silently disable
+if it's missing — see `docs/architecture.md` for the fallback behavior.
+
 ## Scripts
 
 - `npm run dev` — Vite dev server
@@ -30,4 +34,11 @@ npm run dev
 
 ## Status
 
-Currently in **Phase 0 — Foundation**. See `PRODUCTION.md` §12 for the phase plan.
+Phases 0–3 shipped, followed by a **2026-07 design-system redesign**: a warm light/dark visual
+overhaul, a best-times panel with calendar export (.ics / Google Calendar / copy), and live
+presence avatars backed by Firebase Realtime Database. See `PRODUCTION.md` §12 for the full phase
+history and:
+
+- [`docs/architecture.md`](./docs/architecture.md) — system context, data model, security model, CI/CD
+- [`docs/design-system.md`](./docs/design-system.md) — tokens, typography, UI primitives
+- [`docs/ux-flows.md`](./docs/ux-flows.md) — host/invitee journeys, screen inventory, accessibility

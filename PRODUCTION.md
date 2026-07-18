@@ -27,16 +27,16 @@ A lightweight group availability scheduling web app. Same core purpose as When2M
 
 | Pain point in When2Meet | MeetGrid fix |
 |---|---|
-| Drag-to-paint is buggy on mobile (touch events fight scroll) | Dedicated touch handler with explicit "paint mode" toggle, haptic feedback on supported devices |
-| No per-participant time zones — single TZ for whole event | Each participant sees the grid in **their own** TZ; host sees overlap correctly across zones |
+| Drag-to-paint is buggy on mobile (touch events fight scroll) | Dedicated touch handler with explicit "paint mode" toggle, haptic feedback on supported devices ✅ shipped 2026-07 |
+| No per-participant time zones — single TZ for whole event | Each participant sees the grid in **their own** TZ; host sees overlap correctly across zones ✅ shipped 2026-07 |
 | No way to edit availability after submitting without re-finding the link | Optional magic-link email/login to return; localStorage fallback for anonymous users |
 | Visual density poor — colors hard to read with >10 people | Configurable heatmap palette, accessible high-contrast mode, hover tooltips with names |
-| No "best time" surfacing — host has to eyeball the grid | Auto-rank top 3 slots by participant count + duration, pinned at top of host view |
-| No export | Export "best slot" to .ics, Google Calendar quick-add, copy-as-text |
-| No live collaboration feedback | Real-time avatars showing who's currently editing |
+| No "best time" surfacing — host has to eyeball the grid | Auto-rank top 3 slots by participant count + duration, pinned at top of host view ✅ shipped 2026-07 |
+| No export | Export "best slot" to .ics, Google Calendar quick-add, copy-as-text ✅ shipped 2026-07 |
+| No live collaboration feedback | Real-time avatars showing who's currently editing ✅ shipped 2026-07 |
 | No way to mark "if-need-be" availability | Three-state painting: Available / If needed / Unavailable |
-| Ads & dated UI | Clean, ad-free, modern design system |
-| No undo | Undo/redo stack on the grid |
+| Ads & dated UI | Clean, ad-free, modern design system ✅ shipped 2026-07 |
+| No undo | Undo/redo stack on the grid ✅ shipped 2026-07 |
 
 ---
 
@@ -368,6 +368,30 @@ The original spec listed v3/v4 ambitions that remain valuable but are explicitly
 - Smart suggestions from historical group data (Vertex AI).
 
 These live in `BACKLOG.md` under the heading "Beyond launch."
+
+### 2026-07 Redesign ✅ COMPLETE 2026-07
+
+**Goal:** Design-system-first visual overhaul, plus three quality-of-life features, on top of the
+Phase 0–3 codebase — no Firestore schema changes.
+
+- ✅ Warm light/dark design-token system (`src/index.css`, Tailwind v4 `@theme inline`), Nunito
+  typeface, `themeStore` (light/dark/system, persisted, `prefers-color-scheme`-aware), and a shared
+  set of UI primitives (`Button`, `Card`, `SegmentedControl`, `BottomSheet`, `Avatar`, `TextField`,
+  `ThemeToggle`, `Wordmark`) — every existing screen migrated onto them.
+- ✅ Restructured create flow ("two decisions + smart defaults": name + dates up front, everything
+  else collapsed into an Advanced settings row) and a dedicated invitee **join flow**
+  (`JoinScreen`, replacing the old name-prompt overlay) with social proof and auto-rejoin.
+- ✅ **Best times panel** (`src/lib/bestSlots.ts`) ranking top-3 non-overlapping windows by
+  attendance, then duration, then earliness.
+- ✅ **Export** (`src/lib/ics.ts`): client-side RFC 5545 `.ics` download, Google Calendar quick-add
+  URL, and copy-as-text — no `generateIcs` Cloud Function needed.
+- ✅ **Live presence**: Firebase Realtime Database `/presence/{eventId}/{participantId}` with
+  `onDisconnect().remove()` cleanup, rendered as a green dot on each participant's `Avatar`; degrades
+  silently without `VITE_FIREBASE_DATABASE_URL`.
+- ✅ Formal documentation set: `docs/architecture.md`, `docs/design-system.md`, `docs/ux-flows.md`.
+
+Full spec: `docs/superpowers/specs/2026-07-18-redesign-design.md`. Implementation plan:
+`docs/superpowers/plans/2026-07-18-redesign.md`.
 
 ---
 
