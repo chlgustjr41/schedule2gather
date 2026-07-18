@@ -15,6 +15,8 @@ interface CommentsPanelProps {
   isHost: boolean
   /** The viewer's Firebase UID (for "is this my comment" check on the delete button). */
   viewerUid: string | null
+  /** True once the host has finalized a time — new participants can't join to comment. */
+  votingClosed?: boolean
 }
 
 function formatRelative(seconds: number | undefined): string {
@@ -35,7 +37,7 @@ function formatExactTime(seconds: number | undefined): string {
   }
 }
 
-export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid }: CommentsPanelProps) {
+export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid, votingClosed = false }: CommentsPanelProps) {
   const [comments, setComments] = useState<CommentDoc[]>([])
   const [text, setText] = useState('')
   const [posting, setPosting] = useState(false)
@@ -86,7 +88,13 @@ export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid }
           maxLength={500}
           rows={2}
           disabled={!myParticipant || posting}
-          placeholder={myParticipant ? 'Leave a quick note…' : 'Enter your name to post a comment'}
+          placeholder={
+            myParticipant
+              ? 'Leave a quick note…'
+              : votingClosed
+                ? 'Voting is closed — only earlier participants can comment'
+                : 'Enter your name to post a comment'
+          }
           className="w-full border rounded-[12px] px-3 py-2 text-sm resize-none disabled:bg-raised disabled:text-ink-muted"
         />
         <div className="flex items-center justify-between mt-2">

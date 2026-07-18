@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useEventStore } from '@/stores/eventStore'
 import { useAuthStore } from '@/stores/authStore'
 import { loadParticipantsForEvent } from '@/lib/participantId'
-import { setOwnerEmail } from '@/services/eventService'
+import { setOwnerEmail, touchLastVisited } from '@/services/eventService'
 import { registerPresence, subscribeToPresence } from '@/services/presenceService'
 import JoinScreen from '@/components/JoinScreen'
 import AvailabilityGrid from '@/components/AvailabilityGrid'
@@ -14,9 +14,12 @@ import ShareLinkBanner from '@/components/ShareLinkBanner'
 import TimezonePicker from '@/components/TimezonePicker'
 import CommentsPanel from '@/components/CommentsPanel'
 import BestTimesPanel from '@/components/BestTimesPanel'
+import GroupHeatmap from '@/components/GroupHeatmap'
+import FinalizedBanner from '@/components/FinalizedBanner'
 import Avatar from '@/components/ui/Avatar'
 import ThemeToggle from '@/components/ui/ThemeToggle'
 import Wordmark from '@/components/ui/Wordmark'
+import Card from '@/components/ui/Card'
 
 type NamePromptState = { show: false } | { show: true; priorNames: string[]; error: string | null }
 
@@ -26,6 +29,8 @@ export default function EventPage() {
   const event = useEventStore((s) => s.event)
   const myParticipant = useEventStore((s) => s.myParticipant)
   const participants = useEventStore((s) => s.participants)
+  const lastVisitedSecs = useEventStore((s) => s.event?.lastVisitedAt?.seconds ?? null)
+  const hasEvent = useEventStore((s) => s.event !== null)
   const loading = useEventStore((s) => s.loading)
   const notFound = useEventStore((s) => s.notFound)
   const loadEvent = useEventStore((s) => s.loadEvent)
@@ -49,7 +54,7 @@ export default function EventPage() {
   }, [slug, loadEvent, reset])
 
   useEffect(() => {
-    if (!slug || !event || !user || myParticipant) return
+    if (!slug || !event || !user || myParticipant || event.finalized) return
     const map = loadParticipantsForEvent(slug)
     const entries = Object.entries(map)
     if (entries.length === 1) {
@@ -76,6 +81,11 @@ export default function EventPage() {
     if (!slug) return
     return subscribeToPresence(slug, setPresentIds)
   }, [slug])
+
+  useEffect(() => {
+    if (!slug || !hasEvent) return
+    void touchLastVisited(slug, lastVisitedSecs === null ? null : { seconds: lastVisitedSecs })
+  }, [slug, hasEvent, lastVisitedSecs])
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-ink-muted">Loading event…</div>
@@ -116,6 +126,7 @@ export default function EventPage() {
   }
 
   const shareUrl = `${window.location.origin}/e/${slug}`
+  const finalized = event.finalized ?? null
 
   return (
     <div className="min-h-screen">
@@ -124,7 +135,7 @@ export default function EventPage() {
         <ThemeToggle />
       </header>
       <main className="px-4 pb-12">
-        {!myParticipant && namePrompt.show ? (
+        {!finalized && !myParticipant && namePrompt.show ? (
           <JoinScreen priorNames={namePrompt.priorNames} error={namePrompt.error} onSubmit={handleJoin} />
         ) : (
           <>
@@ -167,14 +178,30 @@ export default function EventPage() {
             </div>
 
             <ShareLinkBanner url={shareUrl} />
-            <BestTimesPanel viewerTimezone={viewerTimezone} shareUrl={shareUrl} />
-            {myParticipant && <AvailabilityGrid viewerTimezone={viewerTimezone} />}
+            {finalized ? (
+              <FinalizedBanner slug={slug!} isHost={isHost} viewerTimezone={viewerTimezone} shareUrl={shareUrl} />
+            ) : (
+              <BestTimesPanel viewerTimezone={viewerTimezone} shareUrl={shareUrl} isHost={isHost} slug={slug!} />
+            )}
+            <GroupHeatmap viewerTimezone={viewerTimezone} />
+            {myParticipant && (
+              <Card className="max-w-5xl mx-auto mb-4 border-l-4 border-l-primary">
+                <div className="text-[10px] font-extrabold uppercase tracking-widest text-ink-muted">
+                  ✏️ My times
+                </div>
+                <p className="text-xs text-ink-muted mt-0.5">
+                  {finalized ? 'Voting closed — the time is locked in.' : "Tap or drag to paint when you're free"}
+                </p>
+                <AvailabilityGrid viewerTimezone={viewerTimezone} readOnly={finalized !== null} />
+              </Card>
+            )}
             {slug && (
               <CommentsPanel
                 slug={slug}
                 myParticipant={myParticipant}
                 isHost={isHost}
                 viewerUid={user?.uid ?? null}
+                votingClosed={finalized !== null}
               />
             )}
           </>
