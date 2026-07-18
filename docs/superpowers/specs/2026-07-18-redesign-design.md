@@ -67,7 +67,13 @@ Landing page = wordmark, one-line value prop, create card. The card asks only:
 1. **Event name** (text field).
 2. **Dates** (calendar; responsive single/dual month as currently implemented; past dates disabled).
 
-Time range (default **9 AM–9 PM**) and time zone (auto-detected) collapse into one summary row — `⚙ 9 AM – 9 PM · Eastern ▾` — expanding inline on tap. One tap on **Create event** → event page with the existing share-link banner (restyled, with copy button). No sign-in required; Google sign-in for hosts remains available as today.
+Everything else collapses into one summary row — `⚙ 9 AM – 9 PM · 30 min · Eastern ▾` — showing smart defaults (time range 9 AM–9 PM, 30-minute slots, auto-detected time zone). Tapping it expands an **Advanced settings** section inline:
+
+- **Time range** — earliest/latest bounds per day (limits which hours appear on the grid).
+- **Slot length** — 15 / 30 / 60 minutes (SegmentedControl, default 30). The Firestore model (`slotMinutes`) and `createEvent` validation already support all three; this is a client-only re-exposure.
+- **Time zone** — override the auto-detected event zone.
+
+The section is deliberately structured so future host options (e.g., response deadline) slot in without redesign. One tap on **Create event** → event page with the existing share-link banner (restyled, with copy button). No sign-in required; Google sign-in for hosts remains available as today.
 
 ### 3.2 Invitee: join → paint
 
@@ -129,3 +135,13 @@ Degradation: presence failures are silent (feature hides); export clipboard fail
 ## 7. Rollout
 
 Feature branch → PR (existing preview-channel workflow) → visual review → merge to `main` → auto-deploy to the live Firebase Hosting site. RTDB rules deploy alongside (`firebase.json` gains a `database` target).
+
+## 8. Execution Strategy — Hierarchical Multi-Agent Development
+
+To keep token usage efficient during implementation, the orchestrating session stays lean and delegates:
+
+- **Orchestrator** (main session): holds the plan, dispatches tasks, reviews results, runs integration gates. It does not read large files it isn't editing.
+- **Implementer subagents**: each plan task is written as a self-contained brief (files to touch, exact requirements, verification commands) so a fresh subagent can execute it without re-deriving project context. Independent tasks (e.g., `bestSlots.ts` lib, `ics.ts` lib, token definitions) are dispatched in parallel; dependent tasks (screen migrations onto primitives) run sequentially.
+- **Reviewer subagents**: at each phase gate, a code-review subagent checks the diff against the spec before the orchestrator proceeds.
+
+The implementation plan must group tasks into dependency layers (tokens/primitives → pure libs in parallel → screen migrations → features → docs/verification) and write each task brief to be executable cold, per the superpowers subagent-driven-development skill.
