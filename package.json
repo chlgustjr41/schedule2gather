@@ -17,6 +17,7 @@
     "deploy:functions": "cd functions && npm run build && cd .. && firebase deploy --only functions"
   },
   "dependencies": {
+    "@fontsource/nunito": "^5.2.7",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "firebase": "^12.9.0",
