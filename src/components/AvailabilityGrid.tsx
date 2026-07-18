@@ -180,7 +180,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   }, [undo, redo])
 
   if (!event || !myParticipant || !myCommittedBits) {
-    return <div className="text-center text-gray-500">Loading event…</div>
+    return <div className="text-center text-ink-muted">Loading event…</div>
   }
 
   const myDisplayBits = draftBits ?? myCommittedBits

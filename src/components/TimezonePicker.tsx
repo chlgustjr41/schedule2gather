@@ -37,7 +37,7 @@ export default function TimezonePicker({ value, onChange }: TimezonePickerProps)
         <button
           type="button"
           onClick={() => onChange(detected)}
-          className="text-xs text-primary hover:text-primary underline"
+          className="text-xs text-primary hover:brightness-110 underline"
           title="Reset to your detected timezone"
         >
           Reset
