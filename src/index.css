@@ -77,6 +77,14 @@ body {
   gap: 1.5rem;
 }
 
+/* Range mode: days already merged into the selection stay visibly marked
+   while the user drafts the next range (the draft itself uses rdp's own styles). */
+:root .rdp-root .day-picked .rdp-day_button {
+  background-color: color-mix(in srgb, var(--s2g-primary) 24%, transparent);
+  border-radius: 10px;
+  font-weight: 700;
+}
+
 /* react-day-picker accent → terracotta.
    :root prefix out-specifies the library's own .rdp-root block, which Vite
    injects AFTER this file (it is imported from the component, not main.tsx). */

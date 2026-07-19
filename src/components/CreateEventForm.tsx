@@ -51,7 +51,10 @@ export default function CreateEventForm() {
   const [rangeDraft, setRangeDraft] = useState<DateRange | undefined>(undefined)
 
   const today = useMemo(() => startOfDay(new Date()), [])
-  const nextMonth = useMemo(() => addMonths(today, 1), [today])
+  // Controlled calendar month so the per-month quick-select rows track whatever
+  // months are actually on screen as the user pages through the calendar.
+  const [displayMonth, setDisplayMonth] = useState<Date>(today)
+  const visibleMonths = isMobile ? [displayMonth] : [displayMonth, addMonths(displayMonth, 1)]
 
   const tzOptions = useMemo(() => {
     const tzs = COMMON_TIMEZONES as readonly string[]
@@ -159,27 +162,21 @@ export default function CreateEventForm() {
             setRangeDraft(undefined)
           }}
         />
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-x-6 gap-y-2 mb-3">
-          {renderQuickRow(today)}
-          {renderQuickRow(nextMonth)}
-          {selectedDates.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedDates([])
-                setRangeDraft(undefined)
-              }}
-              className="text-xs text-ink-muted hover:text-ink underline sm:ml-auto self-start sm:self-auto"
-            >
-              Clear all
-            </button>
-          )}
+        {/* One quick-select row per VISIBLE month, aligned above its month column. */}
+        <div className={`mb-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
+          {visibleMonths.map((m) => (
+            <div key={m.getTime()} className="flex justify-center">
+              {renderQuickRow(m)}
+            </div>
+          ))}
         </div>
         <div className="rdp-side-by-side">
           {pickMode === 'days' ? (
             <DayPicker
               mode="multiple"
               numberOfMonths={isMobile ? 1 : 2}
+              month={displayMonth}
+              onMonthChange={setDisplayMonth}
               selected={selectedDates}
               onSelect={(dates) => setSelectedDates(dates ?? [])}
               disabled={{ before: today }}
@@ -189,7 +186,12 @@ export default function CreateEventForm() {
             <DayPicker
               mode="range"
               numberOfMonths={isMobile ? 1 : 2}
+              month={displayMonth}
+              onMonthChange={setDisplayMonth}
               selected={rangeDraft}
+              // Already-added days stay visibly highlighted while the next range is drafted.
+              modifiers={{ picked: selectedDates }}
+              modifiersClassNames={{ picked: 'day-picked' }}
               onSelect={(range) => {
                 // day-picker v9 reports the FIRST click as {from: d, to: d} — a
                 // range is only complete once the user picks a different end day.
@@ -207,7 +209,21 @@ export default function CreateEventForm() {
             />
           )}
         </div>
-        <p className="mt-1 text-xs text-ink-muted">{selectedDates.length} selected</p>
+        <p className="mt-1 text-xs text-ink-muted">
+          {selectedDates.length} selected
+          {selectedDates.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedDates([])
+                setRangeDraft(undefined)
+              }}
+              className="ml-3 text-ink-muted hover:text-ink underline"
+            >
+              Clear all
+            </button>
+          )}
+        </p>
         {pickMode === 'range' && (
           <p className="text-xs text-ink-muted">
             Tap a start date, then an end date — the whole span is added to your selection.
