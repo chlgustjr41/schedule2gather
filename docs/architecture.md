@@ -1,14 +1,18 @@
 # Architecture
 
 schedule2gather is a client-heavy, serverless scheduling app: a React SPA talking directly to
-Firestore (data), the Realtime Database (ephemeral presence), and two small Cloud Functions. There
-is no application server — all product logic (ranking, export generation, painting, undo) runs in
-the browser.
+Firestore (data), the Realtime Database (ephemeral presence), and three small Cloud Functions
+(`createEvent`, `deleteEvent`, `cleanupExpiredEvents`). There is no application server — all
+product logic (ranking, export generation, painting, undo) runs in the browser.
 
 This document reflects the codebase as of the 2026-07 redesign
-(`docs/superpowers/specs/2026-07-18-redesign-design.md`) plus the v1.1 follow-up
-(`docs/superpowers/specs/2026-07-18-v1.1-followup-design.md`): range date selection, the
-group-first stacked layout, host finalize/reopen, and idle-event GC.
+(`docs/superpowers/specs/2026-07-18-redesign-design.md`), the v1.1 follow-up
+(`docs/superpowers/specs/2026-07-18-v1.1-followup-design.md`), the v1.2 mobile UX pass
+(`docs/superpowers/specs/2026-07-19-v1.2-mobile-ux-design.md`), and the v1.3 landing/dashboard
+redesign (`docs/superpowers/specs/2026-07-19-v1.3-landing-dashboard-design.md`): range date
+selection, the group-first stacked layout, host finalize/reopen, idle-event GC, mobile grid/create
+polish, and — new in v1.3 — the landing page's join-by-code flow, a dedicated `/new` create route,
+an owner dashboard (`/dashboard`), and the `deleteEvent` callable.
 
 ## System Context
 
@@ -18,14 +22,15 @@ flowchart LR
   Hosting["Firebase Hosting<br/>(static SPA, global CDN)"]
   Firestore[("Cloud Firestore<br/>events / participants / comments")]
   RTDB[("Realtime Database<br/>presence only")]
-  Functions["Cloud Functions<br/>createEvent (HTTPS callable)"]
+  Functions["Cloud Functions<br/>createEvent, deleteEvent<br/>(HTTPS callables)"]
   Scheduler["cleanupExpiredEvents<br/>(scheduled, daily 03:00 UTC)"]
 
   Hosting -- "serves static bundle" --> Client
-  Client <-- "onSnapshot (real-time reads)<br/>writes: availability, comments, event doc" --> Firestore
+  Client <-- "onSnapshot (real-time reads)<br/>writes: availability, comments, event doc<br/>+ one-shot getDoc/getDocs/getCountFromServer" --> Firestore
   Client <-- "set() + onDisconnect().remove()<br/>onValue() fanout" --> RTDB
-  Client -- "httpsCallable('createEvent')" --> Functions
-  Functions -- "writes new event doc" --> Firestore
+  Client -- "httpsCallable('createEvent' | 'deleteEvent')" --> Functions
+  Functions -- "writes new event doc,<br/>or recursiveDelete's one" --> Firestore
+  Functions -. "best-effort presence cleanup<br/>on delete" .-> RTDB
   Scheduler -- "recursiveDelete expired events + subcollections" --> Firestore
 ```
 
@@ -35,14 +40,16 @@ flowchart LR
 - **Firebase Hosting** — serves the built SPA from a global CDN; SPA rewrite (`**` → `/index.html`);
   long-cache immutable headers on `/assets/**`, no-cache on `/index.html` (`firebase.json`).
 - **Firestore** — the system of record: `events/{slug}`, `events/{slug}/participants/{id}`,
-  `events/{slug}/comments/{id}`. All reads are live `onSnapshot` subscriptions; there is no
-  polling.
+  `events/{slug}/comments/{id}`. Most reads are live `onSnapshot` subscriptions; the v1.3 join-by-code
+  check and dashboard (`getEvent`, `listMyEvents`, `countParticipants`) are the exceptions — one-shot
+  reads, since neither needs live updates.
 - **Realtime Database** — used for exactly one thing: presence. Chosen specifically for its native
   `onDisconnect` semantics (see "Presence sequence" below).
-- **Cloud Functions** — `createEvent` (HTTPS callable, validates input and mints the event doc) and
+- **Cloud Functions** — `createEvent` (HTTPS callable, validates input and mints the event doc),
+  `deleteEvent` (HTTPS callable, v1.3: owner-checked recursive delete, see "Delete event" below), and
   `cleanupExpiredEvents` (scheduled, deletes events past their 90-day `expiresAt`, **or** idle
-  events whose dates have all passed — v1.1, see "Garbage collection" below). Both are
-  request/response or cron-triggered; neither sits in a real-time path.
+  events whose dates have all passed — v1.1, see "Garbage collection" below). All three are
+  request/response or cron-triggered; none sits in a real-time path.
 
 ## Data Model
 
@@ -198,7 +205,7 @@ model; it is not intended to resist a targeted attacker who obtains another part
 | `src/stores/eventStore.ts` | Live event + participants subscriptions (`onSnapshot`), `joinAs`/`updateMyAvailability` actions, holds `myParticipant` |
 | `src/stores/paintStore.ts` | Ephemeral drag-paint interaction state — `origin`, `visited` set, `draftBits`, on/off `mode`, and the mobile `paintMode` toggle |
 | `src/stores/themeStore.ts` | Theme preference (`light`/`dark`/`system`), `localStorage` persistence, stamps `data-theme` on `<html>` |
-| `src/services/eventService.ts` | `createEvent` callable wrapper, `subscribeToEvent`, `setOwnerEmail` |
+| `src/services/eventService.ts` | `createEvent`/`deleteEvent` (v1.3) callable wrappers, `subscribeToEvent`, `getEvent` (v1.3, one-shot), `listMyEvents` (v1.3), `countParticipants` (v1.3), `setOwnerEmail`, `finalizeEvent`, `reopenEvent`, `touchLastVisited` |
 | `src/services/participantService.ts` | `subscribeToParticipants`, `getOrCreateParticipant`, `updateAvailability` |
 | `src/services/commentService.ts` | `subscribeToComments`, `addComment`, `deleteComment` |
 | `src/services/presenceService.ts` | RTDB presence register/subscribe, with silent no-op fallback when RTDB isn't configured |
@@ -215,9 +222,14 @@ model; it is not intended to resist a targeted attacker who obtains another part
 | `src/lib/ics.ts` | Pure `.ics` / Google Calendar URL / summary-text generation, plus a DOM-only `downloadIcs` blob helper |
 | `src/lib/heatColor.ts` | Attendance count → heatmap CSS variable (`heatColor`) / painted-cell color (`mineColor`) |
 | `src/lib/dateRange.ts` | v1.1: pure `mergeRangeIntoDates(existing, from, to, today)` — merges a `DayPicker` `range` selection into the create flow's `selectedDates`, excluding past days and deduplicating by calendar day |
+| `src/lib/joinCode.ts` | v1.3: pure `normalizeCode(raw)` — trims/lowercases, extracts the slug from a pasted `/e/:slug` share URL via regex, strips characters outside `[a-z0-9-]`; used by `LandingPage`'s join-by-code card |
 | `src/components/GroupHeatmap.tsx` | v1.1: read-only group-overlap card — transposed per-date horizontal strips (`heatColor`-driven), hover/tap tooltip centered above the cell |
 | `src/components/FinalizeSheet.tsx` | v1.1: host-only `BottomSheet` — top-3 `bestWindows` as radio choices plus a bounded custom date/time/duration picker; calls `finalizeEvent` |
 | `src/components/FinalizedBanner.tsx` | v1.1: replaces `BestTimesPanel` once `event.finalized` is set — final window in viewer TZ, live attendance count, `ExportSheet` trigger, host-only `reopenEvent` button |
+| `src/components/AppHeader.tsx` | v1.3: shared header for all four pages — `Wordmark`, a **Dashboard** link when `user && !user.isAnonymous`, a **Sign in** ghost button (calls `signInWithGoogle`) otherwise, and `ThemeToggle`; accepts a `className` width override (`max-w-2xl` landing/create, `max-w-5xl` default for dashboard/event) |
+| `src/pages/LandingPage.tsx` | v1.3: rewritten — hero heading/subline, Create CTA → `/new`, join-by-code `Card` (`normalizeCode` + one-shot `getEvent` lookup) |
+| `src/pages/CreatePage.tsx` | v1.3: thin wrapper — `AppHeader` + heading + the unchanged `CreateEventForm`, now living at `/new` |
+| `src/pages/DashboardPage.tsx` | v1.3: Google-sign-in-gated event list — `listMyEvents`, per-row `countParticipants`, copy-link, inline Reopen, "Finalize…" deep-link, Delete (confirmation `BottomSheet` → `deleteEventRemote`) |
 
 **Removed in the v1.1 follow-up:** `src/hooks/useMinWidth.ts` (the `≥1024px` media-query hook that
 drove the old side-by-side dual-grid layout) was deleted once `AvailabilityGrid` dropped that
@@ -280,6 +292,64 @@ most once per 24h) is never idle-deleted regardless of how far in the past its d
 hard cap can remove it. `weekdays_recurring` events are exempt from the idle rule entirely — they
 have no fixed calendar dates to judge "fully passed."
 
+## Dashboard reads (v1.3)
+
+`listMyEvents(uid)` (`src/services/eventService.ts`) is a one-shot `getDocs` query —
+`where('ownerUid', '==', uid)` against the `events` collection — sorted **client-side** by
+`createdAt` descending. A single-field equality filter needs no composite index (Firestore
+auto-indexes every field for single-field equality/inequality queries), which is exactly why the
+sort happens in JavaScript after the fetch rather than via a matching `orderBy('createdAt', 'desc')`
+in the query: adding that `orderBy` alongside the `where` on a different field would require a
+composite index, and the v1.3 spec explicitly ruled composite indexes out of scope.
+
+Per-row counts come from `countParticipants(slug)`, called once per event **after** the list has
+already rendered (so the row list appears before the counts do — see `DashboardPage`'s effect,
+which fires one `countParticipants` promise per event right after `listMyEvents` resolves). Both
+figures are server-side aggregate queries — `getCountFromServer(participantsCollection)` for
+"joined", and a second `getCountFromServer(query(participantsCollection, where('availability', '!=',
+'')))` for "painted" (voted) — so no participant documents are downloaded to compute either count.
+The inequality filter backing "painted" can reject without a supporting index; that rejection is
+caught and only hides the painted figure for that one row (`painted: null`), it does not fail the
+row or the page.
+
+## Delete event (v1.3)
+
+`deleteEvent` (`functions/src/deleteEvent.ts`, exported from `functions/src/index.ts`) is the only
+backend addition in v1.3, and the only path through which an event's data is actually removed by a
+user action — there was no client-side delete before it. That matters because Firestore's client
+SDK cannot cascade-delete subcollections: a plain rules-gated `deleteDoc` on `events/{eventId}`
+would remove the event doc but orphan its `participants` and `comments` subcollections.
+
+- **Input validation:** `req.data.slug` must match `/^[a-z0-9-]{1,40}$/` or the function throws
+  `invalid-argument` before touching Firestore.
+- **Ownership check:** the pure helper `assertDeletable(data, uid)`
+  (`functions/src/lib/deleteGuard.ts`, unit-tested in
+  `functions/src/__tests__/deleteGuard.test.ts`) takes the fetched event doc (or `undefined` if it
+  doesn't exist) and the caller's uid, returning one of
+  `'ok' | 'unauthenticated' | 'not-found' | 'permission-denied'` — no `req.auth` → `unauthenticated`,
+  no doc → `not-found`, `ownerUid` mismatch → `permission-denied`. The callable maps every
+  non-`'ok'` verdict to the matching typed `HttpsError` code.
+- **Deletion:** `db.recursiveDelete(ref)` (Admin SDK) removes the event doc and every document in
+  its `participants` and `comments` subcollections in one call — the same mechanism
+  `cleanupExpiredEvents` already uses for GC.
+- **Presence cleanup:** a best-effort `getDatabase().ref('presence/' + slug).remove()` wrapped in
+  `try/catch` — the RTDB instance may not be provisioned in every environment (see "Degradation"
+  under "Presence sequence" above), so a failure here is swallowed rather than failing the whole
+  delete.
+- Returns `{ ok: true }` on success.
+
+Because the Admin SDK bypasses Firestore rules entirely, `deleteEvent` doesn't rely on the existing
+`allow delete: if request.auth.uid == resource.data.ownerUid` rule on `events/{eventId}` — that rule
+is unchanged by v1.3 and still nominally permits a direct client delete of the top-level doc, but
+the UI now always goes through the callable so subcollections are never orphaned. **No Firestore or
+RTDB rules changes shipped with v1.3** — read/list/`getCountFromServer` were already public, and
+delete is now mediated entirely by the callable.
+
+**Client:** `deleteEventRemote(slug)` (`src/services/eventService.ts`) wraps
+`httpsCallable(functions, 'deleteEvent')`, reusing the same lazily-initialized `Functions` singleton
+`createEvent` already uses (`getFunctionsClient()`). `DashboardPage`'s delete action is gated behind
+a confirmation `BottomSheet` before it's called.
+
 ## CI/CD
 
 Two GitHub Actions workflows (`.github/workflows/`), both `actions/setup-node@v4` on Node 20:
@@ -299,15 +369,21 @@ an `if` guard on `head.repo.full_name`):
 2. `functions/`: `npm ci` → `npm test` → `npm run build`
 3. `npm run build` (root, same `VITE_FIREBASE_*` secrets)
 4. `FirebaseExtended/action-hosting-deploy@v0` with `channelId: live` → production Hosting
-5. `firebase-tools@latest deploy --only functions` (both `createEvent` and `cleanupExpiredEvents`)
-6. **(v1.1)** `firebase-tools@latest deploy --only firestore:rules,database` — deploys
-   `firestore.rules` and `database.rules.json` on every merge, so the `eventOpen()`/`finalized`
-   rule changes (and any future rules edit) ship automatically instead of requiring a manual
-   `firebase deploy --only firestore:rules,database`.
+5. `firebase-tools@latest deploy --only functions` (all three: `createEvent`, `deleteEvent` — v1.3
+   — and `cleanupExpiredEvents`)
+6. **(v1.1)** `firebase-tools@latest deploy --only firestore:rules` — deploys `firestore.rules` on
+   every merge, so the `eventOpen()`/`finalized` rule changes (and any future rules edit) ship
+   automatically instead of requiring a manual deploy. A separate, `continue-on-error: true` step
+   then runs `firebase-tools@latest deploy --only database` for `database.rules.json` — marked
+   best-effort per the workflow's own comment ("Best-effort until the Realtime Database instance is
+   provisioned"), since the RTDB instance isn't provisioned in every environment (see "Degradation"
+   under "Presence sequence" above); once it exists, this step starts deploying its rules for real
+   without any workflow change.
 7. A follow-up `gcloud run services add-iam-policy-binding` step idempotently re-grants
-   `allUsers: run.invoker` on the `createevent` Cloud Run service — gen-2 callables can silently
-   lose the public-invoker binding on redeploy via service account, so this step guards against
-   `createEvent` becoming unreachable after a deploy.
+   `allUsers: run.invoker` on **both** the `createevent` and `deleteevent` Cloud Run services (v1.3
+   added the second binding alongside the new callable) — gen-2 callables can silently lose the
+   public-invoker binding on redeploy via service account, so this step guards against either
+   function becoming unreachable after a deploy.
 
 **Secrets used by both workflows:** `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`,
 `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_DATABASE_URL`, `VITE_FIREBASE_STORAGE_BUCKET`,
@@ -333,6 +409,9 @@ Nothing shipped in this release needs custom infrastructure:
   the browser is strictly cheaper and simpler than a Cloud Function round-trip.
 - **Event creation** is the one place that genuinely needs a trusted server step (slug uniqueness
   check + write), and that's already a small `onCall` Cloud Function — no change needed here.
+- **Event deletion** (v1.3) similarly needs a trusted server step — an owner check plus a
+  cascading delete of subcollections the client SDK can't perform on its own — so it's a second
+  small `onCall` Cloud Function (`deleteEvent`) rather than a client-side rules change.
 
 This mirrors the reasoning already on record in `PRODUCTION.md` §3: plain Firebase stays sufficient
 until either (a) **two-way calendar sync** is added — webhook delivery, OAuth token refresh, and

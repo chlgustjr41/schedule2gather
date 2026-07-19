@@ -1,16 +1,28 @@
 # UX Flows
 
 Host and invitee journeys through schedule2gather after the 2026-07 redesign
-(`docs/superpowers/specs/2026-07-18-redesign-design.md` §3) and the v1.1 follow-up
-(`docs/superpowers/specs/2026-07-18-v1.1-followup-design.md`). Painting mechanics (drag paintbrush,
-paint-mode/scroll gating, undo/redo, autosave, haptics, keyboard nav, ARIA) are retained unchanged
-from earlier phases and reskinned onto the new tokens — not rebuilt.
+(`docs/superpowers/specs/2026-07-18-redesign-design.md` §3), the v1.1 follow-up
+(`docs/superpowers/specs/2026-07-18-v1.1-followup-design.md`), the v1.2 mobile UX pass
+(`docs/superpowers/specs/2026-07-19-v1.2-mobile-ux-design.md`), and the v1.3 landing/dashboard
+redesign (`docs/superpowers/specs/2026-07-19-v1.3-landing-dashboard-design.md`) — new landing hero
++ join-by-code, a dedicated `/new` create route, an owner `/dashboard`, and the `deleteEvent`
+callable. Painting mechanics (drag paintbrush, paint-mode/scroll gating, undo/redo, autosave,
+haptics, keyboard nav, ARIA) are retained unchanged from earlier phases and reskinned onto the new
+tokens — not rebuilt.
+
+Every page (`LandingPage`, `CreatePage`, `DashboardPage`, `EventPage`) shares one `AppHeader`
+(`src/components/AppHeader.tsx`, v1.3), replacing the ad-hoc per-page headers from earlier phases: a
+`Wordmark`, a **Dashboard** link when signed in with Google (`user && !user.isAnonymous`) or a
+**Sign in** ghost button otherwise (calls the existing `authStore.signInWithGoogle`), and the
+`ThemeToggle`. It accepts a `className` width override — `max-w-2xl` on landing/create, `max-w-5xl`
+(the default) on dashboard/event.
 
 ## Host journey
 
 ```mermaid
 flowchart TD
-  A["Land on / (LandingPage)"] --> B["Name the event + pick dates<br/>(CreateEventForm)"]
+  A["Land on / (LandingPage):<br/>hero + Join-by-code card + Create CTA"] --> A1["Tap Create an event"]
+  A1 --> B["/new (CreatePage):<br/>Name the event + pick dates<br/>(CreateEventForm)"]
   B --> C{"Advanced settings?"}
   C -- "tap ⚙ summary row" --> D["Expand: time range, slot length,<br/>time zone override"]
   D --> E
@@ -24,15 +36,18 @@ flowchart TD
   I --> J3["Copy summary text"]
 ```
 
-The create form asks only two decisions up front — **event name** and **dates** (multi-select
-calendar, 1 month on mobile / 2 on desktop, past dates disabled, per-month "All / Weekdays /
-Weekends" quick-select). Everything else collapses into one summary row
-(`⚙ 9 AM – 9 PM · 30 min · Eastern ▾`) that expands into the earliest/latest hour selects, a
-15/30/60-minute `SegmentedControl`, and a time zone override — all defaulted so a host can ignore
-them entirely. One tap on **Create event** calls the existing `createEvent` Cloud Function and
-lands the host on `/e/:slug`, already joined (no separate join step for the creator). No sign-in is
-required to create or paint; Google sign-in remains available to hosts who want cross-device
-ownership (`SignInButton`, unchanged from earlier phases).
+The create form (`CreateEventForm`, moved verbatim from the landing page to its own route at `/new`
+in v1.3 — `CreatePage` is a thin wrapper of `AppHeader` + heading + the component, no behavior
+changed) asks only two decisions up front — **event name** and **dates** (multi-select calendar, 1
+month on mobile / 2 on desktop, past dates disabled, per-month "All / Weekdays / Weekends"
+quick-select). Everything else collapses into one summary row (`⚙ 9 AM – 9 PM · 30 min · Eastern
+▾`) that expands into the earliest/latest hour selects, a 15/30/60-minute `SegmentedControl`, and a
+time zone override — all defaulted so a host can ignore them entirely. One tap on **Create event**
+calls the existing `createEvent` Cloud Function and lands the host on `/e/:slug`, already joined (no
+separate join step for the creator). No sign-in is required to create or paint; Google sign-in
+remains available to hosts who want cross-device ownership (`SignInButton` on the event page,
+unchanged from earlier phases) and now also unlocks the **Host dashboard** (below) for finding
+previously-created events.
 
 **Date picking has two modes** (v1.1 follow-up), switched via a `Pick days | Date range`
 `SegmentedControl` above the calendar (default: **Pick days**). Range mode swaps the calendar to
@@ -64,6 +79,31 @@ triggers that auto-push, a hint line appears under the wheels for ~2.5 seconds: 
 window must be at least 1 hour." `handleSubmit` still carries a defense-in-depth check
 (`startHour >= endHour` → "Latest must be after earliest") in case construction is ever bypassed,
 and the server validation in `createEvent` remains the final word.
+
+## Join by code
+
+```mermaid
+flowchart TD
+  A["Land on / (LandingPage)"] --> B["Type/paste into<br/>'Have an event code?' field"]
+  B --> C["normalizeCode(): trim, lowercase,<br/>extract slug from a pasted /e/:slug URL,<br/>strip anything outside [a-z0-9-]"]
+  C --> D{"Tap Join event"}
+  D -- "normalized code is empty" --> D1["Button stays disabled —<br/>nothing submits"]
+  D -- "submit" --> E["getEvent(slug):<br/>one-shot getDoc, not a subscription"]
+  E -- "found" --> F["navigate('/e/' + slug)"]
+  E -- "not found" --> G["Inline: 'No event found with<br/>that code — check for typos.'"]
+  E -- "lookup rejects (offline)" --> H["Inline: 'Couldn't check the code —<br/>are you online?'"]
+```
+
+`LandingPage` (`src/pages/LandingPage.tsx`, v1.3) pairs the join card with the Create CTA below the
+hero: a `TextField` labeled "Have an event code?" plus a "Join event" `Button`. `normalizeCode()`
+(`src/lib/joinCode.ts`) accepts either a bare code or a pasted full share link — it trims,
+lowercases, and if the input matches `/\/e\/([a-z0-9-]+)/` extracts just the slug, then strips any
+character outside `[a-z0-9-]`. Submitting calls `getEvent(slug)`
+(`src/services/eventService.ts` — a one-shot `getDoc`, unlike the live `subscribeToEvent` used once
+on the event page itself): a hit navigates straight to `/e/{slug}`; a miss shows an inline "No event
+found with that code — check for typos."; a rejected lookup (e.g. offline) shows "Couldn't check the
+code — are you online?". The Join button is disabled whenever the normalized code is empty, so an
+all-whitespace or punctuation-only paste can't be submitted.
 
 ## Invitee journey
 
@@ -160,12 +200,68 @@ flowchart TD
   `lastVisitedAt` writes (used only for garbage collection, see `docs/architecture.md`) are
   separately fire-and-forget and silent on failure.
 
+## Host dashboard
+
+```mermaid
+flowchart TD
+  A["Tap Dashboard in AppHeader<br/>(link only shown when signed in with Google)"] --> B{"user &amp;&amp; !user.isAnonymous?"}
+  B -- "no" --> C["Gate card: explainer text +<br/>'Sign in with Google' button"]
+  C --> D["signInWithGoogle(): linkWithPopup on the<br/>current anonymous uid — falls back to<br/>signInWithPopup only on credential-already-in-use"]
+  D --> E
+  B -- "yes" --> E["listMyEvents(uid): where ownerUid == uid,<br/>client-sorted by createdAt desc"]
+  E --> F["Row per event: name · date range ·<br/>joined/painted counts (load async) ·<br/>✅ Finalized badge · created date"]
+  F --> G1["Row click → /e/:slug"]
+  F --> G2["Copy-link icon → clipboard,<br/>'Copied ✓' flash for 2s"]
+  F --> G3{"Finalized?"}
+  G3 -- "yes" --> G3a["Reopen button →<br/>reopenEvent(), optimistic row update"]
+  G3 -- "no" --> G3b["'Finalize…' link → /e/:slug<br/>(finalize itself stays on the event page)"]
+  F --> G4["Delete (danger ghost) →<br/>confirmation BottomSheet"]
+  G4 -- "Keep it" --> F
+  G4 -- "Delete event" --> H["deleteEvent callable →<br/>row removed on success,<br/>inline error on failure"]
+```
+
+Because `signInWithGoogle` **links** the existing anonymous uid (`linkWithPopup`, falling back to
+`signInWithPopup` only on `auth/credential-already-in-use` / `auth/email-already-in-use`), any event
+a host created anonymously *before* signing in keeps the same `ownerUid` and shows up on the
+dashboard immediately after sign-in — no separate claim/transfer step, no data migration.
+
+`DashboardPage` (`src/pages/DashboardPage.tsx`, v1.3) gates on `user && !user.isAnonymous`. Signed
+out (or still anonymous), it shows an explainer card ("See and manage every event you've created —
+sign in and they follow you across devices.") and a "Sign in with Google" button reusing the
+existing `authStore.signInWithGoogle`. Once signed in, `listMyEvents(uid)` — a single-field
+`where('ownerUid', '==', uid)` query, sorted client-side by `createdAt` descending (see "Dashboard
+reads" in `docs/architecture.md` for why no composite index is needed) — loads the list: loading
+renders three pulsing skeleton rows, an empty list shows "Nothing yet — create your first event"
+with a CTA to `/new`, and a query failure shows a Retry button. Each row's joined/painted counts
+load **after** the list (`countParticipants(slug)`, one call per event, aggregate `getCountFromServer`
+queries — no participant documents are downloaded); if the "painted" aggregate query rejects (its
+`availability != ''` filter can need an index), only that figure is hidden for that row, not the
+whole row.
+
+Row actions: clicking anywhere on the row card navigates to `/e/{slug}`; a "Copy link" button copies
+the share URL to the clipboard and flashes "Copied ✓" for 2s (falls back to an inline error banner
+if `navigator.clipboard.writeText` throws); a finalized event shows a **Reopen** button (calls the
+existing `reopenEvent`, then optimistically patches that row's `finalized` to `null` in local state
+rather than re-fetching); a non-finalized event shows a **Finalize…** link that deep-links to
+`/e/{slug}` instead — finalizing is not done inline on the dashboard, only from the event page's
+existing Finish-vote flow. **Delete** opens a `BottomSheet` confirmation ("Delete "&lt;name&gt;"? All
+votes and comments are removed permanently. This can't be undone.") with "Keep it" / "Delete event"
+buttons; confirming calls the new `deleteEvent` Cloud Function (`deleteEventRemote` in
+`src/services/eventService.ts`) and removes the row from the list on success, or shows an inline
+"Couldn't delete — try again." on failure without closing the sheet (the delete button also disables
+while in flight).
+
 ## Screen inventory
 
 | Route | Component | Contents |
 |---|---|---|
-| `/` | `LandingPage` | `Wordmark`, `ThemeToggle`, value-prop heading, `CreateEventForm` (with the Pick days / Date range toggle) |
-| `/e/:slug` | `EventPage` | If not finalized and not yet joined: `JoinScreen`. Otherwise: header (`Wordmark`, `ThemeToggle`, event title, date/slot count, participant `Avatar` row with presence dots, host badge + sign-in for the owner, `TimezonePicker`) → `ShareLinkBanner` → `BestTimesPanel` (spawns `ExportSheet` / host-only `FinalizeSheet`) **or** `FinalizedBanner` when finalized → `GroupHeatmap` → My-times `Card` wrapping `AvailabilityGrid` (only when joined; `readOnly` when finalized) → `CommentsPanel` |
+| `/` | `LandingPage` (v1.3, rewritten) | `AppHeader` (`max-w-2xl`) · hero heading + subline · Create CTA `Button` → `/new` · join-by-code `Card` (`TextField` + `normalizeCode` + one-shot `getEvent` lookup) |
+| `/new` | `CreatePage` (v1.3, new) | `AppHeader` (`max-w-2xl`) · heading · the unchanged `CreateEventForm` (Pick days / Date range toggle, Advanced settings) |
+| `/dashboard` | `DashboardPage` (v1.3, new) | `AppHeader` (`max-w-5xl`) · signed-out gate (explainer + "Sign in with Google") **or** event list — `listMyEvents`, per-row `countParticipants`, copy-link, inline Reopen, "Finalize…" deep-link, Delete via `deleteEvent` callable behind a confirmation `BottomSheet` |
+| `/e/:slug` | `EventPage` | `AppHeader` (`max-w-5xl` default; v1.3 replaces the page's own inline `Wordmark`/`ThemeToggle`). If not finalized and not yet joined: `JoinScreen`. Otherwise: event title, date/slot count, participant `Avatar` row with presence dots, host badge + sign-in for the owner, `TimezonePicker` → `ShareLinkBanner` → `BestTimesPanel` (spawns `ExportSheet` / host-only `FinalizeSheet`) **or** `FinalizedBanner` when finalized → `GroupHeatmap` → My-times `Card` wrapping `AvailabilityGrid` (only when joined; `readOnly` when finalized) → `CommentsPanel` |
+
+Any unmatched route redirects to `/` (`<Route path="*" element={<Navigate to="/" replace />} />` in
+`src/App.tsx`).
 
 ## Mobile vs desktop
 

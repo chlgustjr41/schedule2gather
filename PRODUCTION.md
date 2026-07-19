@@ -451,6 +451,40 @@ release, no backend/rules/Functions changes.
 
 Full spec: `docs/superpowers/specs/2026-07-19-v1.2-mobile-ux-design.md`.
 
+### 2026-07 v1.3 ✅ COMPLETE 2026-07
+
+**Goal:** A real landing page with join-by-code, a dedicated create route, and an owner dashboard
+to find and manage previously-created events — the first backend addition since launch
+(`deleteEvent`), otherwise client-only.
+
+- ✅ **Landing page rewrite** (`/`, `src/pages/LandingPage.tsx`): hero headline/subline + Create
+  CTA → `/new`, plus a **join-by-code** card (`TextField` + `normalizeCode()` in
+  `src/lib/joinCode.ts`, which accepts either a bare code or a pasted `/e/:slug` share link) that
+  resolves via a one-shot `getEvent(slug)` lookup — hit navigates straight to the event, miss shows
+  "No event found with that code," a rejected (offline) lookup shows its own inline message.
+- ✅ **`/new` create route**: `CreateEventForm` moved verbatim off the landing page into its own
+  thin `CreatePage`, unchanged in behavior.
+- ✅ **`/dashboard`** (`src/pages/DashboardPage.tsx`): gated on Google sign-in
+  (`user && !user.isAnonymous`); shows every event the signed-in user owns
+  (`listMyEvents` — single-field `ownerUid` query, client-sorted, no composite index) with
+  per-row joined/painted counts (`countParticipants`, `getCountFromServer` aggregates — the
+  "painted" figure degrades to hidden rather than failing the row if its filtered aggregate query
+  rejects), copy-link, inline **Reopen** for finalized events, a **Finalize…** deep-link to the
+  event page (finalizing itself stays there), and **Delete** behind a confirmation `BottomSheet`.
+  Because `signInWithGoogle` links the existing anonymous uid rather than creating a new one,
+  events created before sign-in keep their `ownerUid` and appear on the dashboard immediately.
+- ✅ **`deleteEvent` Cloud Function** (`functions/src/deleteEvent.ts`): the only backend addition —
+  an owner-checked (pure `assertDeletable` helper, unit-tested), recursive delete
+  (`db.recursiveDelete`, covering the `participants`/`comments` subcollections the client SDK can't
+  cascade-delete on its own) with typed `HttpsError` codes and a best-effort RTDB presence cleanup.
+  No Firestore/RTDB rules changes were needed. CI's Cloud Run public-invoker step now re-grants
+  `allUsers: run.invoker` on both `createevent` and `deleteevent`.
+- ✅ **Shared `AppHeader`** (`src/components/AppHeader.tsx`): one header for all four pages —
+  `Wordmark`, a **Dashboard** link when signed in with Google or a **Sign in** button otherwise,
+  and `ThemeToggle` — replacing each page's own ad-hoc header.
+
+Full spec: `docs/superpowers/specs/2026-07-19-v1.3-landing-dashboard-design.md`.
+
 ---
 
 ## 13. Implementation Discipline
