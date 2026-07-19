@@ -15,11 +15,13 @@ import { createEvent } from '@/services/eventService'
 import { useAuthStore } from '@/stores/authStore'
 import { COMMON_TIMEZONES, detectTimezone, formatTimezoneLabel } from '@/lib/timezones'
 import { mergeRangeIntoDates } from '@/lib/dateRange'
+import { clampTimeRange } from '@/lib/timeRange'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import SegmentedControl from '@/components/ui/SegmentedControl'
 import TextField from '@/components/ui/TextField'
+import WheelPicker from '@/components/ui/WheelPicker'
 
 type DayCategory = 'all' | 'weekdays' | 'weekends'
 
@@ -29,6 +31,9 @@ function formatHour(h: number): string {
   const display = norm % 12 === 0 ? 12 : norm % 12
   return `${display} ${suffix}`
 }
+
+const HOURS_START = Array.from({ length: 24 }, (_, h) => ({ value: h, label: formatHour(h) }))
+const HOURS_END = Array.from({ length: 24 }, (_, i) => ({ value: i + 1, label: formatHour(i + 1) }))
 
 export default function CreateEventForm() {
   const navigate = useNavigate()
@@ -47,6 +52,7 @@ export default function CreateEventForm() {
   const [timezone, setTimezone] = useState(detectedTz)
   const [selectedDates, setSelectedDates] = useState<Date[]>([])
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [rangeHint, setRangeHint] = useState(false)
   const [pickMode, setPickMode] = useState<'days' | 'range'>('days')
   const [rangeDraft, setRangeDraft] = useState<DateRange | undefined>(undefined)
 
@@ -61,6 +67,21 @@ export default function CreateEventForm() {
     if (tzs.includes(detectedTz)) return tzs
     return [detectedTz, ...tzs]
   }, [detectedTz])
+
+  const changeHours = (changed: 'start' | 'end', value: number) => {
+    const next = clampTimeRange(
+      changed === 'start' ? value : startHour,
+      changed === 'end' ? value : endHour,
+      changed,
+    )
+    const pushed = changed === 'start' ? next.end !== endHour : next.start !== startHour
+    setStartHour(next.start)
+    setEndHour(next.end)
+    if (pushed) {
+      setRangeHint(true)
+      window.setTimeout(() => setRangeHint(false), 2500)
+    }
+  }
 
   const selectInMonth = (anchor: Date, category: DayCategory) => {
     const allDays = eachDayOfInterval({ start: startOfMonth(anchor), end: endOfMonth(anchor) })
@@ -92,6 +113,9 @@ export default function CreateEventForm() {
     try {
       if (selectedDates.length === 0) {
         throw new Error('Pick at least one date')
+      }
+      if (startHour >= endHour) {
+        throw new Error('Latest must be after earliest')
       }
       const dates = [...selectedDates]
         .sort((a, b) => a.getTime() - b.getTime())
@@ -209,6 +233,30 @@ export default function CreateEventForm() {
             />
           )}
         </div>
+        {selectedDates.length > 0 && (
+          <div className={`mt-2 flex gap-1.5 ${isMobile ? 'overflow-x-auto flex-nowrap pb-1' : 'flex-wrap'}`}>
+            {[...selectedDates]
+              .sort((a, b) => a.getTime() - b.getTime())
+              .map((d) => (
+                <span
+                  key={d.toDateString()}
+                  className="shrink-0 inline-flex items-center gap-1 bg-raised border border-line rounded-full px-2.5 py-1 text-xs font-bold"
+                >
+                  {format(d, 'EEE, MMM d')}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${format(d, 'MMM d')}`}
+                    onClick={() =>
+                      setSelectedDates((prev) => prev.filter((x) => x.toDateString() !== d.toDateString()))
+                    }
+                    className="text-ink-muted hover:text-danger"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+          </div>
+        )}
         <p className="mt-1 text-xs text-ink-muted">
           {selectedDates.length} selected
           {selectedDates.length > 0 && (
@@ -243,24 +291,61 @@ export default function CreateEventForm() {
         </button>
         {advancedOpen && (
           <div className="px-4 pb-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            {isMobile ? (
               <div>
-                <label htmlFor="start-hour" className="block text-xs font-bold text-ink-muted mb-1">Earliest</label>
-                <select id="start-hour" value={startHour} onChange={(e) => setStartHour(Number(e.target.value))} className={hourSelectClass}>
-                  {Array.from({ length: 24 }, (_, h) => (
-                    <option key={h} value={h}>{formatHour(h)}</option>
-                  ))}
-                </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Earliest</span>
+                    <WheelPicker
+                      ariaLabel="Earliest hour"
+                      options={HOURS_START}
+                      value={startHour}
+                      onChange={(v) => changeHours('start', v)}
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Latest</span>
+                    <WheelPicker
+                      ariaLabel="Latest hour"
+                      options={HOURS_END}
+                      value={endHour}
+                      onChange={(v) => changeHours('end', v)}
+                    />
+                  </div>
+                </div>
+                {rangeHint && (
+                  <p className="text-xs text-ink-muted mt-1 text-center">
+                    Adjusted — the window must be at least 1 hour.
+                  </p>
+                )}
               </div>
+            ) : (
               <div>
-                <label htmlFor="end-hour" className="block text-xs font-bold text-ink-muted mb-1">Latest</label>
-                <select id="end-hour" value={endHour} onChange={(e) => setEndHour(Number(e.target.value))} className={hourSelectClass}>
-                  {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => (
-                    <option key={h} value={h}>{formatHour(h)}</option>
-                  ))}
-                </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="start-hour" className="block text-xs font-bold text-ink-muted mb-1">Earliest</label>
+                    <select id="start-hour" value={startHour} onChange={(e) => changeHours('start', Number(e.target.value))} className={hourSelectClass}>
+                      {HOURS_START.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="end-hour" className="block text-xs font-bold text-ink-muted mb-1">Latest</label>
+                    <select id="end-hour" value={endHour} onChange={(e) => changeHours('end', Number(e.target.value))} className={hourSelectClass}>
+                      {HOURS_END.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {rangeHint && (
+                  <p className="text-xs text-ink-muted mt-1">
+                    Adjusted — the window must be at least 1 hour.
+                  </p>
+                )}
               </div>
-            </div>
+            )}
             <div>
               <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
               <SegmentedControl
