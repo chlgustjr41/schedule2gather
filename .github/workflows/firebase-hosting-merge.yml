@@ -100,3 +100,8 @@ jobs:
             --project=schedule2gather \
             --member=allUsers \
             --role=roles/run.invoker
+          gcloud run services add-iam-policy-binding joinwithname \
+            --region=us-central1 \
+            --project=schedule2gather \
+            --member=allUsers \
+            --role=roles/run.invoker

@@ -163,3 +163,22 @@ export async function deleteEventRemote(slug: string): Promise<void> {
   )
   await callable({ slug })
 }
+
+export interface JoinInput {
+  slug: string
+  name?: string
+  passcode?: string
+  claimParticipantId?: string
+}
+
+/** Server-authoritative join/claim (see functions/src/joinWithName.ts). */
+export async function joinWithNameRemote(
+  input: JoinInput,
+): Promise<{ participantId: string; name: string }> {
+  const callable = httpsCallable<JoinInput, { participantId: string; name: string }>(
+    getFunctionsClient(),
+    'joinWithName',
+  )
+  const result = await callable(input)
+  return result.data
+}
