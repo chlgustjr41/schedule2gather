@@ -118,7 +118,16 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
                 <option key={d} value={i}>{formatSlotDateLabel(event, i, viewerTimezone)}</option>
               ))}
             </select>
-            <select value={customStart} onChange={(e) => setCustomStart(Number(e.target.value))} className={selectClass} aria-label="Start time">
+            <select
+              value={customStart}
+              onChange={(e) => {
+                const t = Number(e.target.value)
+                setCustomStart(t)
+                setCustomSlots((s) => Math.min(s, spd - t))
+              }}
+              className={selectClass}
+              aria-label="Start time"
+            >
               {Array.from({ length: spd }).map((_, t) => (
                 <option key={t} value={t}>{formatSlotTimeLabel(event, customDate * spd + t, viewerTimezone)}</option>
               ))}

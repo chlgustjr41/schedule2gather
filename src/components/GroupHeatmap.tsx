@@ -57,7 +57,8 @@ export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
         👥 Group overlap
       </div>
       <p className="text-xs text-ink-muted mt-0.5 mb-3">Read-only — darker green = more people free</p>
-      <div className="space-y-1.5">
+      {/* Tapping anywhere outside a cell dismisses the tooltip (touch affordance). */}
+      <div className="space-y-1.5" onClick={() => setTip(null)}>
         {event.dates.map((dateStr, dateIdx) => (
           <div key={dateStr} className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-ink-muted w-16 shrink-0 text-right">
@@ -73,7 +74,10 @@ export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
                     aria-label={tipText(slotIdx)}
                     onPointerEnter={() => setTip(slotIdx)}
                     onPointerLeave={() => setTip(null)}
-                    onClick={() => setTip((cur) => (cur === slotIdx ? null : slotIdx))}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setTip((cur) => (cur === slotIdx ? null : slotIdx))
+                    }}
                     className="relative flex-1 min-w-[4px] h-[18px] rounded-[2px] border-0 p-0 cursor-pointer"
                     style={{ backgroundColor: heatColor(counts[slotIdx] ?? 0, total) }}
                   >

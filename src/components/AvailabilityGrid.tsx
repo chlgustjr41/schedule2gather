@@ -432,7 +432,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                     backgroundColor: bg,
                     touchAction: interactive && effectivePaintMode ? 'none' : 'auto',
                   }}
-                  className="w-12 h-6 border border-line cursor-pointer relative focus:outline-2 focus:outline-primary focus:outline-offset-[-2px]"
+                  className={`w-12 h-6 border border-line relative focus:outline-2 focus:outline-primary focus:outline-offset-[-2px] ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
                 >
                   {tooltipSlot === slotIdx && !draftBits && (
                     <CellTooltip
