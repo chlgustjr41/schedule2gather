@@ -558,6 +558,27 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
         )}
       </div>
       )}
+      {/* Read-only (finalized) grids keep the view controls — only editing tools hide. */}
+      {!interactive && (
+        <div className="flex justify-center gap-1 sm:gap-2 mb-3 flex-wrap">
+          <Button variant="secondary" size="sm" aria-label="Zoom out" disabled={zoom === 'sm'} onClick={() => changeZoom(-1)}>
+            −
+          </Button>
+          <Button variant="secondary" size="sm" aria-label="Zoom in" disabled={zoom === 'lg'} onClick={() => changeZoom(1)}>
+            +
+          </Button>
+          {isMobile && (
+            <Button
+              variant={eventDaysOnly ? 'primary' : 'secondary'}
+              size="sm"
+              aria-pressed={eventDaysOnly}
+              onClick={() => setEventDaysOnly((v) => !v)}
+            >
+              Event days only
+            </Button>
+          )}
+        </div>
+      )}
       <div className="overflow-x-auto">
         {renderTable()}
       </div>
