@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAuthStore } from '@/stores/authStore'
 import { useEventStore } from '@/stores/eventStore'
 import Avatar from '@/components/ui/Avatar'
 import Button from '@/components/ui/Button'
@@ -10,6 +11,9 @@ export default function JoinScreen() {
   const event = useEventStore((s) => s.event)
   const participants = useEventStore((s) => s.participants)
   const join = useEventStore((s) => s.join)
+  // The join callable requires auth; anonymous sign-in runs on app load and may
+  // still be in flight on a fresh device — gate actions until it resolves.
+  const authReady = useAuthStore((s) => s.user !== null)
 
   const [claimTarget, setClaimTarget] = useState<string | null>(null)
   const [claimPasscode, setClaimPasscode] = useState('')
@@ -71,7 +75,7 @@ export default function JoinScreen() {
               <li key={p.participantId}>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || !authReady}
                   onClick={() => handleClaim(p)}
                   className="w-full flex items-center gap-2 py-2 text-left hover:bg-raised rounded-[8px] px-1 disabled:opacity-50"
                 >
@@ -94,7 +98,7 @@ export default function JoinScreen() {
                       placeholder="Passcode"
                       autoFocus
                     />
-                    <Button size="sm" type="submit" disabled={busy || claimPasscode.length < 4}>
+                    <Button size="sm" type="submit" disabled={busy || !authReady || claimPasscode.length < 4}>
                       Unlock
                     </Button>
                   </form>
@@ -139,8 +143,8 @@ export default function JoinScreen() {
               taking it.
             </p>
           </div>
-          <Button size="lg" type="submit" disabled={busy || newName.trim().length === 0} className="mt-4">
-            {busy ? 'Joining…' : 'Join & paint my times'}
+          <Button size="lg" type="submit" disabled={busy || !authReady || newName.trim().length === 0} className="mt-4">
+            {!authReady ? 'Connecting…' : busy ? 'Joining…' : 'Join & paint my times'}
           </Button>
         </form>
       </Card>
