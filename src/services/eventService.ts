@@ -179,6 +179,11 @@ export async function joinWithNameRemote(
     getFunctionsClient(),
     'joinWithName',
   )
-  const result = await callable(input)
+  // The callable encoder serializes undefined values as null; drop absent
+  // fields entirely so the server sees a clean payload.
+  const payload = Object.fromEntries(
+    Object.entries(input).filter(([, v]) => v !== undefined),
+  ) as JoinInput
+  const result = await callable(payload)
   return result.data
 }

@@ -12,7 +12,13 @@ export const joinWithName = onCall({ region: 'us-central1' }, async (req) => {
   const uid = req.auth?.uid
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in required')
 
-  const { slug, name, passcode, claimParticipantId } = (req.data ?? {}) as Record<string, unknown>
+  // Callable serialization encodes client-side `undefined` as null — normalize
+  // both to undefined so "field absent" and "field: undefined" behave the same.
+  const raw = (req.data ?? {}) as Record<string, unknown>
+  const slug = raw.slug ?? undefined
+  const name = raw.name ?? undefined
+  const passcode = raw.passcode ?? undefined
+  const claimParticipantId = raw.claimParticipantId ?? undefined
   if (typeof slug !== 'string' || !/^[a-z0-9-]{1,40}$/.test(slug)) {
     throw new HttpsError('invalid-argument', 'Invalid event code')
   }
