@@ -485,6 +485,56 @@ to find and manage previously-created events — the first backend addition sinc
 
 Full spec: `docs/superpowers/specs/2026-07-19-v1.3-landing-dashboard-design.md`.
 
+### 2026-07 v1.4 ✅ COMPLETE 2026-07
+
+**Goal:** Fix a stale-header sign-in bug, add a real session model, and rework the join flow so a
+name can be protected and reclaimed — the second backend addition since launch (`joinWithName`,
+alongside v1.3's `deleteEvent`).
+
+- ✅ **Instant sign-in state**: `authStore` now derives an explicit `isGoogleUser` boolean instead
+  of letting `AppHeader`/`DashboardPage` check `user.isAnonymous` directly. Root cause of the bug
+  this fixes: `linkWithPopup` mutates the existing Firebase `User` object in place (same UID),
+  so `onAuthStateChanged` doesn't reliably re-fire and the header could keep showing "Sign in"
+  after a successful Google sign-in. `isGoogleUser` is set from three places — the auth listener,
+  explicitly at the end of `signInWithGoogle()`, and forced `false` at the start of `signOut()` —
+  so the header flips immediately in all three cases.
+- ✅ **Sign out + 1h auto-logoff**: `AppHeader`'s signed-in cluster gained a **Sign out** button
+  (ends only the Google session; the browser silently re-signs in anonymously, so voting identity
+  is untouched). A new `useAutoLogoff` hook (`src/hooks/useAutoLogoff.ts`), mounted once in `App`,
+  signs Google users out after 1 hour of inactivity, tracked via a `localStorage`-shared activity
+  clock so the idle timer is consistent across tabs; anonymous participants are never
+  auto-signed-out.
+- ✅ **Tinted header band**: `AppHeader` now renders inside a full-width `bg-primary/10 border-b
+  border-line` band instead of a plain header row.
+- ✅ **Create-form layout**: the quick-select row gained a right-aligned `{n} selected · Clear all`
+  cluster; the old chips-row-below-calendar preview was replaced by a scrollable list of selected
+  dates **above** the calendar (`max-h-40 overflow-y-auto`, one removable row per date).
+- ✅ **Grid controls rework** (`AvailabilityGrid`): day/time headers now render inside a tappable
+  chip (`bg-raised border border-line rounded-[8px]`); zoom (`− / +`) and "Event days only" moved
+  into their own row below the table; Undo/Redo became a visually distinct circular icon-button
+  pair (`w-9 h-9 rounded-full`) grouped on the right of the row above the table.
+- ✅ **`joinWithName` Cloud Function** (`functions/src/joinWithName.ts`): server-authoritative
+  create-or-claim of a participant identity. Creating a name checks for a normalized-name
+  duplicate (`already-exists`, carrying the clashing participant's ID so the client can offer
+  claiming it) and, given an optional passcode, hashes it with `scryptSync` + a random per-participant
+  salt into the new client-inaccessible `events/{slug}/secrets/{participantId}` subcollection.
+  Claiming an existing name checks that subcollection: no secret → open claim; a secret → the
+  supplied passcode must `timingSafeEqual`-verify against the stored hash, or the call throws
+  `permission-denied`. `firestore.rules` now denies `participants` creation entirely (`allow
+  create: if false` — only the callable's Admin SDK can mint a new participant doc) and adds a
+  deny-all `secrets` match block; existing same-uid `update`/`delete` rules (and the direct-write
+  auto-rejoin fast path) are unchanged. CI's Cloud Run public-invoker step gained a third binding
+  for `joinwithname`.
+- ✅ **`JoinScreen` rework**: replaces the old single name field with a live "Continue as" list of
+  existing participants (🔒 badge when passcode-protected; tapping claims, or reveals an inline
+  passcode field first) plus a "join as a new name" form with an optional passcode. The v1.1-era
+  "prior names on this device" quick-fill shortcuts are dropped, superseded by the live list.
+  Auto-rejoin (direct localStorage → Firestore write) is unchanged, with one new fallback: if that
+  write is denied (e.g. an auth reset left a stale uid on the stored identity), the user falls
+  through to `JoinScreen` to claim their name instead of hitting a dead end.
+
+Full spec: `docs/superpowers/specs/2026-07-19-v1.4-auth-join-polish-design.md`.
+
 ---
 
 ## 13. Implementation Discipline
