@@ -1,9 +1,60 @@
 @import "tailwindcss";
 
-@theme {
-  --color-primary: var(--color-indigo-600);
-  --color-primary-foreground: var(--color-white);
-  --font-sans: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+/* ---- schedule2gather design tokens ---- */
+:root {
+  --s2g-bg: #F0E7D5;
+  --s2g-surface: #FFFDF7;
+  --s2g-raised: #FFFFFF;
+  --s2g-line: #DFD3BB;
+  --s2g-ink: #3D3833;
+  --s2g-ink-muted: #857A66;
+  --s2g-primary: #E0653A;
+  --s2g-on-primary: #FFFFFF;
+  --s2g-danger: #C94F36;
+  --s2g-success: #2F9E57;
+  --s2g-slot-empty: #FFFDF7;
+  --s2g-mine: #2F9E57;
+  --s2g-heat-1: #CDE8CF;
+  --s2g-heat-2: #9FD8A6;
+  --s2g-heat-3: #63BF77;
+  --s2g-heat-4: #2F9E57;
+  --s2g-shadow-card: 0 2px 8px rgba(61, 56, 51, 0.06);
+  --s2g-shadow-primary: 0 4px 12px rgba(224, 101, 58, 0.30);
+}
+
+:root[data-theme="dark"] {
+  --s2g-bg: #2B2825;
+  --s2g-surface: #363230;
+  --s2g-raised: #403B37;
+  --s2g-line: #4A443E;
+  --s2g-ink: #F0EAE0;
+  --s2g-ink-muted: #B0A697;
+  --s2g-primary: #F07B4F;
+  --s2g-on-primary: #2A1006;
+  --s2g-danger: #E06A50;
+  --s2g-success: #58C277;
+  --s2g-slot-empty: #3A3631;
+  --s2g-mine: #3F9459;
+  --s2g-heat-1: #2F5A3C;
+  --s2g-heat-2: #3C7A4F;
+  --s2g-heat-3: #4EA265;
+  --s2g-heat-4: #63C87E;
+  --s2g-shadow-card: none;
+  --s2g-shadow-primary: none;
+}
+
+@theme inline {
+  --color-canvas: var(--s2g-bg);
+  --color-surface: var(--s2g-surface);
+  --color-raised: var(--s2g-raised);
+  --color-line: var(--s2g-line);
+  --color-ink: var(--s2g-ink);
+  --color-ink-muted: var(--s2g-ink-muted);
+  --color-primary: var(--s2g-primary);
+  --color-on-primary: var(--s2g-on-primary);
+  --color-danger: var(--s2g-danger);
+  --color-success: var(--s2g-success);
+  --font-sans: 'Nunito', system-ui, Avenir, Helvetica, Arial, sans-serif;
 }
 
 * {
@@ -15,8 +66,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
   font-family: var(--font-sans);
-  background-color: #f9fafb;
-  color: #111827;
+  background-color: var(--s2g-bg);
+  color: var(--s2g-ink);
 }
 
 /* Force react-day-picker months to render side-by-side (overrides the default flex-wrap). */
@@ -24,4 +75,12 @@ body {
   flex-wrap: nowrap;
   justify-content: center;
   gap: 1.5rem;
+}
+
+/* react-day-picker accent → terracotta.
+   :root prefix out-specifies the library's own .rdp-root block, which Vite
+   injects AFTER this file (it is imported from the component, not main.tsx). */
+:root .rdp-root {
+  --rdp-accent-color: var(--s2g-primary);
+  --rdp-accent-background-color: color-mix(in srgb, var(--s2g-primary) 18%, transparent);
 }

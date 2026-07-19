@@ -17,14 +17,14 @@ export default function TimezonePicker({ value, onChange }: TimezonePickerProps)
 
   return (
     <div className="flex items-center gap-2 text-sm">
-      <label className="text-gray-500 whitespace-nowrap" htmlFor="viewer-tz">
+      <label className="text-ink-muted whitespace-nowrap" htmlFor="viewer-tz">
         Viewing in:
       </label>
       <select
         id="viewer-tz"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="border rounded px-2 py-1 text-sm max-w-[260px]"
+        className="border rounded-[12px] px-2 py-1 text-sm max-w-[260px]"
       >
         {options.map((tz) => (
           <option key={tz} value={tz}>
@@ -37,7 +37,7 @@ export default function TimezonePicker({ value, onChange }: TimezonePickerProps)
         <button
           type="button"
           onClick={() => onChange(detected)}
-          className="text-xs text-indigo-600 hover:text-indigo-700 underline"
+          className="text-xs text-primary hover:brightness-110 underline"
           title="Reset to your detected timezone"
         >
           Reset

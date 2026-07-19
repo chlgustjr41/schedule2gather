@@ -4,7 +4,8 @@ import { useEventStore } from '@/stores/eventStore'
 import { useAuthStore } from '@/stores/authStore'
 import { loadParticipantsForEvent } from '@/lib/participantId'
 import { setOwnerEmail } from '@/services/eventService'
-import NamePrompt from '@/components/NamePrompt'
+import { registerPresence, subscribeToPresence } from '@/services/presenceService'
+import JoinScreen from '@/components/JoinScreen'
 import AvailabilityGrid from '@/components/AvailabilityGrid'
 import EventNotFound from '@/components/EventNotFound'
 import HostBadge from '@/components/HostBadge'
@@ -12,6 +13,10 @@ import SignInButton from '@/components/SignInButton'
 import ShareLinkBanner from '@/components/ShareLinkBanner'
 import TimezonePicker from '@/components/TimezonePicker'
 import CommentsPanel from '@/components/CommentsPanel'
+import BestTimesPanel from '@/components/BestTimesPanel'
+import Avatar from '@/components/ui/Avatar'
+import ThemeToggle from '@/components/ui/ThemeToggle'
+import Wordmark from '@/components/ui/Wordmark'
 
 type NamePromptState = { show: false } | { show: true; priorNames: string[]; error: string | null }
 
@@ -20,6 +25,7 @@ export default function EventPage() {
   const user = useAuthStore((s) => s.user)
   const event = useEventStore((s) => s.event)
   const myParticipant = useEventStore((s) => s.myParticipant)
+  const participants = useEventStore((s) => s.participants)
   const loading = useEventStore((s) => s.loading)
   const notFound = useEventStore((s) => s.notFound)
   const loadEvent = useEventStore((s) => s.loadEvent)
@@ -28,6 +34,7 @@ export default function EventPage() {
   const [viewerTimezone, setViewerTimezone] = useState<string>(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   )
+  const [presentIds, setPresentIds] = useState<Set<string>>(() => new Set())
   // useReducer instead of useState: the project's react-hooks/set-state-in-effect
   // lint rule rejects setState calls inside effects. A reducer dispatch is allowed.
   const [namePrompt, setNamePrompt] = useReducer(
@@ -57,8 +64,21 @@ export default function EventPage() {
     }
   }, [slug, event, user, myParticipant, joinAs])
 
+  const participantId = myParticipant?.participantId
+  const participantName = myParticipant?.name
+
+  useEffect(() => {
+    if (!slug || !participantId || !participantName) return
+    return registerPresence(slug, participantId, participantName)
+  }, [slug, participantId, participantName])
+
+  useEffect(() => {
+    if (!slug) return
+    return subscribeToPresence(slug, setPresentIds)
+  }, [slug])
+
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading event…</div>
+    return <div className="min-h-screen flex items-center justify-center text-ink-muted">Loading event…</div>
   }
 
   if (notFound || !event) {
@@ -98,49 +118,68 @@ export default function EventPage() {
   const shareUrl = `${window.location.origin}/e/${slug}`
 
   return (
-    <div className="min-h-screen p-4">
-      <ShareLinkBanner url={shareUrl} />
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between max-w-5xl mx-auto mb-4 gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold break-words">{event.name}</h1>
-          <p className="text-sm text-gray-500">
-            {event.dates.length} {event.mode === 'weekdays_recurring' ? 'weekdays' : 'dates'} ·{' '}
-            {event.timeRange.start}:00–{event.timeRange.end}:00 · {event.slotMinutes} min slots ·{' '}
-            {event.timezone}
-          </p>
-          {isHost && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <HostBadge />
-              <SignInButton onSignedIn={handleHostSignedIn} />
+    <div className="min-h-screen">
+      <header className="max-w-5xl mx-auto px-4 pt-4 flex items-center justify-between">
+        <Wordmark />
+        <ThemeToggle />
+      </header>
+      <main className="px-4 pb-12">
+        {!myParticipant && namePrompt.show ? (
+          <JoinScreen priorNames={namePrompt.priorNames} error={namePrompt.error} onSubmit={handleJoin} />
+        ) : (
+          <>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between max-w-5xl mx-auto mt-4 mb-4 gap-3">
+              <div className="min-w-0">
+                <h1 className="text-2xl font-extrabold break-words">{event.name}</h1>
+                <p className="text-sm text-ink-muted mt-0.5">
+                  {event.dates.length} {event.mode === 'weekdays_recurring' ? 'weekdays' : 'dates'} ·{' '}
+                  {event.slotMinutes} min slots
+                </p>
+                {participants.length > 0 && (
+                  <div className="flex items-center mt-2">
+                    {participants.slice(0, 8).map((p) => (
+                      <span key={p.participantId} className="-ml-1.5 first:ml-0">
+                        <Avatar name={p.name} present={presentIds.has(p.participantId)} size={28} />
+                      </span>
+                    ))}
+                    {participants.length > 8 && (
+                      <span className="text-xs text-ink-muted font-bold ml-2">
+                        +{participants.length - 8}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {isHost && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <HostBadge />
+                    <SignInButton onSignedIn={handleHostSignedIn} />
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col sm:items-end gap-2 shrink-0">
+                {myParticipant && (
+                  <div className="text-sm text-ink-muted">
+                    Painting as <b className="text-ink font-extrabold">{myParticipant.name}</b>
+                  </div>
+                )}
+                <TimezonePicker value={viewerTimezone} onChange={setViewerTimezone} />
+              </div>
             </div>
-          )}
-        </div>
-        <div className="flex flex-col sm:items-end gap-2 shrink-0">
-          {myParticipant && (
-            <div className="text-sm text-gray-500">Painting as {myParticipant.name}</div>
-          )}
-          <TimezonePicker value={viewerTimezone} onChange={setViewerTimezone} />
-        </div>
-      </div>
 
-      {myParticipant && <AvailabilityGrid viewerTimezone={viewerTimezone} />}
-
-      {slug && (
-        <CommentsPanel
-          slug={slug}
-          myParticipant={myParticipant}
-          isHost={isHost}
-          viewerUid={user?.uid ?? null}
-        />
-      )}
-
-      {namePrompt.show && (
-        <NamePrompt
-          priorNames={namePrompt.priorNames}
-          error={namePrompt.error}
-          onSubmit={handleJoin}
-        />
-      )}
+            <ShareLinkBanner url={shareUrl} />
+            <BestTimesPanel viewerTimezone={viewerTimezone} shareUrl={shareUrl} />
+            {myParticipant && <AvailabilityGrid viewerTimezone={viewerTimezone} />}
+            {slug && (
+              <CommentsPanel
+                slug={slug}
+                myParticipant={myParticipant}
+                isHost={isHost}
+                viewerUid={user?.uid ?? null}
+              />
+            )}
+          </>
+        )}
+      </main>
     </div>
   )
 }

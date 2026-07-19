@@ -31,7 +31,7 @@ _(empty)_
 
 - Days-of-week event mode (recurring or within range) — deprioritized from P1 per UX simplification. The Cloud Function already validates all three modes; re-adding the client UI is straightforward when the recurring-meeting use case becomes a priority.
 - Magic-link return-edit for participants/hosts.
-- Live editor avatars (showing who's currently painting).
+- ~~Live editor avatars (showing who's currently painting).~~ — shipped as presence dots, 2026-07 (RTDB `/presence/{eventId}/{participantId}`, see `docs/architecture.md`).
 - Optional Google Calendar one-way overlay ("show my busy times").
 - Per-slot comments.
 - Saved templates ("recurring poker night").
