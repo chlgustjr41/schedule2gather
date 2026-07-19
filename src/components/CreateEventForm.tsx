@@ -187,7 +187,9 @@ export default function CreateEventForm() {
               numberOfMonths={isMobile ? 1 : 2}
               selected={rangeDraft}
               onSelect={(range) => {
-                if (range?.from && range.to) {
+                // day-picker v9 reports the FIRST click as {from: d, to: d} — a
+                // range is only complete once the user picks a different end day.
+                if (range?.from && range.to && range.from.getTime() !== range.to.getTime()) {
                   const from = range.from
                   const to = range.to
                   setSelectedDates((prev) => mergeRangeIntoDates(prev, from, to, today))
