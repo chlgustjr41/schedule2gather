@@ -1,7 +1,9 @@
 # Design System
 
 The "Warm & Friendly" design system introduced in the 2026-07 redesign
-(`docs/superpowers/specs/2026-07-18-redesign-design.md` §2). Tokens are CSS custom properties
+(`docs/superpowers/specs/2026-07-18-redesign-design.md` §2), extended by the v1.1 follow-up
+(`docs/superpowers/specs/2026-07-18-v1.1-followup-design.md`) with the group-first stacked layout
+and its new components. Tokens are CSS custom properties
 declared in `src/index.css`; components consume them only through Tailwind v4 utility classes —
 there is no `dark:` variant anywhere in the codebase. Dark mode works by **reassigning the same
 custom properties** under `:root[data-theme="dark"]`, so every component that uses a token utility
@@ -184,17 +186,22 @@ render-blocking Google Fonts request.
 Generic over `T extends string`. Renders `role="tablist"` / `role="tab"` with `aria-selected`.
 
 ```tsx
-// src/components/AvailabilityGrid.tsx (mobile My-times/Group toggle, <1024px)
+// src/components/CreateEventForm.tsx (v1.1 range-selection toggle)
 <SegmentedControl
-  className="max-w-xs mx-auto mb-3"
+  className="max-w-[260px] mb-3"
   options={[
-    { value: 'mine', label: '✏️ My times' },
-    { value: 'group', label: '👥 Group' },
+    { value: 'days', label: 'Pick days' },
+    { value: 'range', label: 'Date range' },
   ]}
-  value={layer}
-  onChange={setLayer}
+  value={pickMode}
+  onChange={(v) => { setPickMode(v); setRangeDraft(undefined) }}
 />
 ```
+
+The old mobile **My times / Group** view toggle on `AvailabilityGrid` (`<1024px`) no longer exists
+— it was removed with the v1.1 stacked layout (see "Component reference" below and
+`docs/ux-flows.md`). `AvailabilityGrid` still uses `SegmentedControl` on mobile, but now for a
+**Week / Month** page-size toggle, unrelated to the old layer switch.
 
 ### `BottomSheet.tsx`
 
@@ -283,6 +290,105 @@ No props. A `react-router-dom` `Link` to `/` rendering `schedule2gather` with th
 // src/pages/EventPage.tsx
 <Wordmark />
 ```
+
+## Component reference (`src/components/`, v1.1 additions)
+
+These aren't `ui/` primitives — they're event-page-specific components introduced by the v1.1
+follow-up (`docs/superpowers/specs/2026-07-18-v1.1-followup-design.md`). Each carries the
+left-accent convention documented below.
+
+### `GroupHeatmap.tsx`
+
+| Prop | Type | Default |
+|---|---|---|
+| `viewerTimezone` | `string` | required |
+
+Read-only; reads `event`/`participants` straight from `eventStore`, so it needs no other props.
+Renders one horizontal strip per event date; hover/tap a cell for a tooltip centered above it.
+
+```tsx
+// src/pages/EventPage.tsx
+<GroupHeatmap viewerTimezone={viewerTimezone} />
+```
+
+### `FinalizeSheet.tsx`
+
+| Prop | Type | Default |
+|---|---|---|
+| `slug` | `string` | required |
+| `viewerTimezone` | `string` | required |
+| `onClose` | `() => void` | required |
+
+A `BottomSheet` (host-only, spawned from `BestTimesPanel`'s 🏁 Finish vote button) listing the
+top-3 `bestWindows` as radio rows plus a "Custom time…" row; confirming calls `finalizeEvent`.
+
+```tsx
+// src/components/BestTimesPanel.tsx
+{showFinalize && (
+  <FinalizeSheet slug={slug} viewerTimezone={viewerTimezone} onClose={() => setShowFinalize(false)} />
+)}
+```
+
+### `FinalizedBanner.tsx`
+
+| Prop | Type | Default |
+|---|---|---|
+| `slug` | `string` | required |
+| `isHost` | `boolean` | required |
+| `viewerTimezone` | `string` | required |
+| `shareUrl` | `string` | required |
+
+Replaces `BestTimesPanel` once `event.finalized` is set. Shows the final window in the viewer's
+TZ, a live attendance count, an **Add to calendar** button (spawns `ExportSheet`), and — host only
+— a ghost **Reopen voting** button that calls `reopenEvent`.
+
+```tsx
+// src/pages/EventPage.tsx
+{finalized ? (
+  <FinalizedBanner slug={slug!} isHost={isHost} viewerTimezone={viewerTimezone} shareUrl={shareUrl} />
+) : (
+  <BestTimesPanel viewerTimezone={viewerTimezone} shareUrl={shareUrl} isHost={isHost} slug={slug!} />
+)}
+```
+
+### `CellTooltip.tsx`
+
+| Prop | Type | Default |
+|---|---|---|
+| `names` | `string[]` | required |
+
+Unchanged component, but its meaning shifted in v1.1: it now renders **only** for the interactive
+My-times grid (own-cell hover), listing whoever else is free in that slot — the Group layer's old
+tooltip usage moved to `GroupHeatmap`'s own inline tooltip markup instead. Positioned **centered
+directly above** the hovered/focused cell (`absolute bottom-full left-1/2 -translate-x-1/2 mb-1`),
+not to the side or below.
+
+```tsx
+// src/components/AvailabilityGrid.tsx
+{tooltipSlot === slotIdx && !draftBits && (
+  <CellTooltip
+    names={participants
+      .filter((p) => unpack(p.availability, event.slotCount)[slotIdx])
+      .map((p) => p.name)}
+  />
+)}
+```
+
+### Left-accent convention
+
+Cards that carry group/read-only data vs. the viewer's own editable data are distinguished by a
+4px left border, not just their heading icon:
+
+- **`border-l-4 border-l-success`** — read-only, everyone-sees-the-same-thing surfaces:
+  `GroupHeatmap` and `FinalizedBanner` both use it (green ties back to the same hue as the heatmap
+  ramp and the "✅ Finalized" state).
+- **`border-l-4 border-l-primary`** — the viewer's own editable surface: the My-times `Card`
+  wrapping `AvailabilityGrid` (defined inline in `src/pages/EventPage.tsx`, not inside
+  `AvailabilityGrid.tsx` itself) uses the primary/orange accent to signal "this one is yours to
+  change."
+
+`BestTimesPanel` (pre-finalization) and plain `Card` usages elsewhere carry no left accent — the
+convention is reserved for the two paired states above.
 
 ## Documented deviations
 
