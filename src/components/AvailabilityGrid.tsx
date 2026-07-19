@@ -420,7 +420,9 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                 className={`p-2 text-sm font-medium select-none ${interactive ? 'cursor-pointer hover:bg-raised' : ''}`}
                 title={interactive ? 'Click to toggle this entire column' : undefined}
               >
-                {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
+                <span className={interactive ? 'inline-block bg-raised border border-line rounded-[8px] px-1.5 py-0.5 active:bg-primary/20 select-none' : undefined}>
+                  {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
+                </span>
               </th>
             )
           })}
@@ -437,7 +439,9 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               title={interactive ? 'Click to toggle this entire row' : undefined}
             >
               {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
-              {formatSlotTimeLabel(event, timeIdx, viewerTimezone)}
+              <span className={interactive ? 'inline-block bg-raised border border-line rounded-[8px] px-1.5 py-0.5 active:bg-primary/20 select-none' : undefined}>
+                {formatSlotTimeLabel(event, timeIdx, viewerTimezone)}
+              </span>
             </td>
             {visibleColumns.map((col) => {
               if (col.eventDateIdx === -1) {
@@ -518,28 +522,34 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
         >
           Clear all
         </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          type="button"
-          onClick={() => void undo()}
-          disabled={undoStack.length === 0}
-          title={`Undo (${UNDO_HOTKEY_LABEL})`}
-          aria-label={`Undo (${UNDO_HOTKEY_LABEL})`}
-        >
-          ↶ Undo
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          type="button"
-          onClick={() => void redo()}
-          disabled={redoStack.length === 0}
-          title={`Redo (${REDO_HOTKEY_LABEL})`}
-          aria-label={`Redo (${REDO_HOTKEY_LABEL})`}
-        >
-          Redo ↷
-        </Button>
+        <div className="flex items-center gap-1 ml-auto">
+          <button
+            type="button"
+            onClick={() => void undo()}
+            disabled={undoStack.length === 0}
+            title={`Undo (${UNDO_HOTKEY_LABEL})`}
+            aria-label={`Undo (${UNDO_HOTKEY_LABEL})`}
+            className="w-9 h-9 rounded-full border border-line bg-surface text-ink-muted hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            ↺
+          </button>
+          <button
+            type="button"
+            onClick={() => void redo()}
+            disabled={redoStack.length === 0}
+            title={`Redo (${REDO_HOTKEY_LABEL})`}
+            aria-label={`Redo (${REDO_HOTKEY_LABEL})`}
+            className="w-9 h-9 rounded-full border border-line bg-surface text-ink-muted hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            ↻
+          </button>
+        </div>
+      </div>
+      )}
+      <div className="overflow-x-auto">
+        {renderTable()}
+      </div>
+      <div className="flex justify-center gap-1 sm:gap-2 mt-3 flex-wrap">
         <Button variant="secondary" size="sm" aria-label="Zoom out" disabled={zoom === 'sm'} onClick={() => changeZoom(-1)}>
           −
         </Button>
@@ -556,31 +566,6 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
             Event days only
           </Button>
         )}
-      </div>
-      )}
-      {/* Read-only (finalized) grids keep the view controls — only editing tools hide. */}
-      {!interactive && (
-        <div className="flex justify-center gap-1 sm:gap-2 mb-3 flex-wrap">
-          <Button variant="secondary" size="sm" aria-label="Zoom out" disabled={zoom === 'sm'} onClick={() => changeZoom(-1)}>
-            −
-          </Button>
-          <Button variant="secondary" size="sm" aria-label="Zoom in" disabled={zoom === 'lg'} onClick={() => changeZoom(1)}>
-            +
-          </Button>
-          {isMobile && (
-            <Button
-              variant={eventDaysOnly ? 'primary' : 'secondary'}
-              size="sm"
-              aria-pressed={eventDaysOnly}
-              onClick={() => setEventDaysOnly((v) => !v)}
-            >
-              Event days only
-            </Button>
-          )}
-        </div>
-      )}
-      <div className="overflow-x-auto">
-        {renderTable()}
       </div>
       {interactive && showPaintToggle && (
         <div className="flex justify-center mt-3">

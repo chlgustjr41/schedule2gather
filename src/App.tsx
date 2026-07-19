@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { useAutoLogoff } from '@/hooks/useAutoLogoff'
 import LandingPage from '@/pages/LandingPage'
 import CreatePage from '@/pages/CreatePage'
 import EventPage from '@/pages/EventPage'
@@ -13,6 +14,8 @@ export default function App() {
     const unsub = init()
     return unsub
   }, [init])
+
+  useAutoLogoff()
 
   return (
     <BrowserRouter>

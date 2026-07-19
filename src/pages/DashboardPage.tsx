@@ -68,8 +68,8 @@ export default function DashboardPage() {
   const user = useAuthStore((s) => s.user)
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle)
   const navigate = useNavigate()
-  const googleUser = user !== null && !user.isAnonymous
-  const uid = googleUser ? user.uid : null
+  const googleUser = useAuthStore((s) => s.isGoogleUser)
+  const uid = googleUser && user ? user.uid : null
 
   // useReducer keeps the repo's strict set-state-in-effect lint rule happy.
   const [state, dispatch] = useReducer(reduceLoad, { phase: 'idle' })
