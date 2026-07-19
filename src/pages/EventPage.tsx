@@ -16,9 +16,8 @@ import CommentsPanel from '@/components/CommentsPanel'
 import BestTimesPanel from '@/components/BestTimesPanel'
 import GroupHeatmap from '@/components/GroupHeatmap'
 import FinalizedBanner from '@/components/FinalizedBanner'
+import AppHeader from '@/components/AppHeader'
 import Avatar from '@/components/ui/Avatar'
-import ThemeToggle from '@/components/ui/ThemeToggle'
-import Wordmark from '@/components/ui/Wordmark'
 import Card from '@/components/ui/Card'
 
 type NamePromptState = { show: false } | { show: true; priorNames: string[]; error: string | null }
@@ -130,10 +129,7 @@ export default function EventPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="max-w-5xl mx-auto px-4 pt-4 flex items-center justify-between">
-        <Wordmark />
-        <ThemeToggle />
-      </header>
+      <AppHeader />
       <main className="px-4 pb-12">
         {!finalized && !myParticipant && namePrompt.show ? (
           <JoinScreen priorNames={namePrompt.priorNames} error={namePrompt.error} onSubmit={handleJoin} />

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import LandingPage from '@/pages/LandingPage'
+import CreatePage from '@/pages/CreatePage'
 import EventPage from '@/pages/EventPage'
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/new" element={<CreatePage />} />
         <Route path="/e/:slug" element={<EventPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
