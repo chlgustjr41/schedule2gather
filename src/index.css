@@ -92,3 +92,15 @@ body {
   --rdp-accent-color: var(--s2g-primary);
   --rdp-accent-background-color: color-mix(in srgb, var(--s2g-primary) 18%, transparent);
 }
+
+/* v1.2 — comfortable touch targets for the date calendar on phones. */
+@media (max-width: 767px) {
+  :root .rdp-root .rdp-day_button {
+    min-width: 42px;
+    min-height: 42px;
+    font-size: 15px;
+  }
+  :root .rdp-root .rdp-day {
+    padding: 2px;
+  }
+}
