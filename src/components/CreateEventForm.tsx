@@ -12,6 +12,7 @@ import {
   startOfMonth,
 } from 'date-fns'
 import { createEvent } from '@/services/eventService'
+import { useAuthStore } from '@/stores/authStore'
 import { COMMON_TIMEZONES, detectTimezone, formatTimezoneLabel } from '@/lib/timezones'
 import { mergeRangeIntoDates } from '@/lib/dateRange'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -32,6 +33,9 @@ function formatHour(h: number): string {
 export default function CreateEventForm() {
   const navigate = useNavigate()
   const isMobile = useIsMobile()
+  // Anonymous sign-in runs on app load; creating an event before it resolves
+  // would hit the callable unauthenticated (401). Gate the CTA until ready.
+  const authedUser = useAuthStore((s) => s.user)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -275,8 +279,8 @@ export default function CreateEventForm() {
 
       {error && <p className="text-danger text-sm">{error}</p>}
 
-      <Button size="lg" type="submit" disabled={submitting}>
-        {submitting ? 'Creating…' : 'Create event'}
+      <Button size="lg" type="submit" disabled={submitting || !authedUser}>
+        {!authedUser ? 'Connecting…' : submitting ? 'Creating…' : 'Create event'}
       </Button>
     </form>
   )
