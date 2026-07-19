@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/authStore'
 import LandingPage from '@/pages/LandingPage'
 import CreatePage from '@/pages/CreatePage'
 import EventPage from '@/pages/EventPage'
+import DashboardPage from '@/pages/DashboardPage'
 
 export default function App() {
   const init = useAuthStore((s) => s.init)
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/new" element={<CreatePage />} />
         <Route path="/e/:slug" element={<EventPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
