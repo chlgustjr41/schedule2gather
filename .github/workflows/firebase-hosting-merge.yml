@@ -68,10 +68,18 @@ jobs:
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SCHEDULE2GATHER }}' > "$GOOGLE_APPLICATION_CREDENTIALS"
           npx firebase-tools@latest deploy --only functions --project schedule2gather --non-interactive
 
-      - name: Deploy Firestore + RTDB rules
+      - name: Deploy Firestore rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
-        run: npx firebase-tools@latest deploy --only firestore:rules,database --project schedule2gather --non-interactive
+        run: npx firebase-tools@latest deploy --only firestore:rules --project schedule2gather --non-interactive
+
+      # Best-effort until the Realtime Database instance is provisioned (presence
+      # feature). Once it exists, this step starts deploying its rules for real.
+      - name: Deploy RTDB rules (best-effort)
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: npx firebase-tools@latest deploy --only database --project schedule2gather --non-interactive
 
       # gen-2 callables sometimes lose the public invoker binding on redeploy via service account.
       # Idempotently re-grant `allUsers: run.invoker` so the function stays publicly callable.
