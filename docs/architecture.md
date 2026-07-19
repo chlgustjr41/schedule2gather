@@ -5,7 +5,10 @@ Firestore (data), the Realtime Database (ephemeral presence), and two small Clou
 is no application server — all product logic (ranking, export generation, painting, undo) runs in
 the browser.
 
-This document reflects the codebase as of the 2026-07 redesign (`docs/superpowers/specs/2026-07-18-redesign-design.md`).
+This document reflects the codebase as of the 2026-07 redesign
+(`docs/superpowers/specs/2026-07-18-redesign-design.md`) plus the v1.1 follow-up
+(`docs/superpowers/specs/2026-07-18-v1.1-followup-design.md`): range date selection, the
+group-first stacked layout, host finalize/reopen, and idle-event GC.
 
 ## System Context
 
@@ -37,7 +40,8 @@ flowchart LR
 - **Realtime Database** — used for exactly one thing: presence. Chosen specifically for its native
   `onDisconnect` semantics (see "Presence sequence" below).
 - **Cloud Functions** — `createEvent` (HTTPS callable, validates input and mints the event doc) and
-  `cleanupExpiredEvents` (scheduled, deletes events past their 90-day `expiresAt`). Both are
+  `cleanupExpiredEvents` (scheduled, deletes events past their 90-day `expiresAt`, **or** idle
+  events whose dates have all passed — v1.1, see "Garbage collection" below). Both are
   request/response or cron-triggered; neither sits in a real-time path.
 
 ## Data Model
@@ -57,6 +61,8 @@ flowchart LR
 | `slotMinutes` | `15 \| 30 \| 60` | Grid resolution |
 | `timezone` | `string` | Event's canonical IANA timezone; the bitmap is indexed in this zone |
 | `slotCount` | `number` | `dates.length × slotsPerDay`; precomputed server-side, reused client-side (`bestSlots.ts`) |
+| `finalized` | `{ startSlot: number; endSlot: number; finalizedAt: Timestamp } \| null` | v1.1: set by `finalizeEvent`, cleared (`null`) by `reopenEvent`. Absent on events created before v1.1 — treated as open (see `eventOpen()` below) |
+| `lastVisitedAt` | `Timestamp?` | v1.1: best-effort visit marker written by `touchLastVisited`, client-throttled to once per 24h; read by `cleanupExpiredEvents`' idle-GC predicate |
 
 ### `events/{slug}/participants/{participantId}` — `ParticipantDoc` (`src/services/participantService.ts`)
 
@@ -125,14 +131,29 @@ shows presence dots — no error, no retry loop, no user-visible failure.
 
 - **`events/{eventId}`** — public read (`allow read: if true`); `create` is always denied at the
   rules layer (events can only be created through the `createEvent` callable, which uses the Admin
-  SDK and bypasses rules); `update`/`delete` require `request.auth.uid == resource.data.ownerUid`.
+  SDK and bypasses rules); `delete` requires `request.auth.uid == resource.data.ownerUid`.
+  **`update` (v1.1)** is a two-way `||`:
+  - the host (`request.auth.uid == resource.data.ownerUid`) may update **any** field — this is how
+    `finalizeEvent`/`reopenEvent` (writing `finalized`) and `setOwnerEmail` (writing `ownerEmail`)
+    both work, unchanged from the host's pre-existing full-update right; **or**
+  - **any signed-in user** (including anonymous) may update the doc if the write's
+    `diff(resource.data).affectedKeys()` is *exactly* `['lastVisitedAt']` — i.e. a single-field
+    visit-timestamp bump, and nothing else, from anyone who has the link.
 - **`events/{eventId}/participants/{participantId}`** — public read; `create` requires
-  `request.auth != null`, `uid` on the new doc matching the caller's UID, and `name` a non-empty
-  string ≤80 chars; `update`/`delete` require the caller's UID to match the doc's `uid`.
+  `request.auth != null`, the event's `eventOpen()` gate (below), `uid` on the new doc matching the
+  caller's UID, and `name` a non-empty string ≤80 chars; `update` requires the caller's UID to
+  match the doc's `uid` **and** `eventOpen()`; `delete` only requires the UID match (no
+  `eventOpen()` gate — a participant may still remove their own row after finalization).
+  **`eventOpen()`** (v1.1, defined inline in the rules) is true — painting/joining allowed — when
+  the event doc has no `finalized` field at all, or `finalized == null`; false while a finalized
+  window is set. This is the server-side enforcement behind the finalize lock: a paint write racing
+  a finalize is rejected here regardless of what the client's optimistic UI assumed.
 - **`events/{eventId}/comments/{commentId}`** — public read; `create` requires an authenticated
   caller whose UID matches the new doc's `uid`, plus length bounds on `text` (1–500) and
   `authorName` (1–80); `update` is always denied (comments are immutable once posted); `delete` is
-  allowed by the comment's own author **or** the event's `ownerUid` (host moderation).
+  allowed by the comment's own author **or** the event's `ownerUid` (host moderation). Comment
+  creation is **not** gated by `eventOpen()` — commenting stays open after finalization (the UI
+  restricts new commenters to prior participants; see `docs/ux-flows.md`).
 
 ### Realtime Database (`database.rules.json`, in full)
 
@@ -193,6 +214,14 @@ model; it is not intended to resist a targeted attacker who obtains another part
 | `src/lib/bestSlots.ts` | Pure best-window ranking algorithm (see below) |
 | `src/lib/ics.ts` | Pure `.ics` / Google Calendar URL / summary-text generation, plus a DOM-only `downloadIcs` blob helper |
 | `src/lib/heatColor.ts` | Attendance count → heatmap CSS variable (`heatColor`) / painted-cell color (`mineColor`) |
+| `src/lib/dateRange.ts` | v1.1: pure `mergeRangeIntoDates(existing, from, to, today)` — merges a `DayPicker` `range` selection into the create flow's `selectedDates`, excluding past days and deduplicating by calendar day |
+| `src/components/GroupHeatmap.tsx` | v1.1: read-only group-overlap card — transposed per-date horizontal strips (`heatColor`-driven), hover/tap tooltip centered above the cell |
+| `src/components/FinalizeSheet.tsx` | v1.1: host-only `BottomSheet` — top-3 `bestWindows` as radio choices plus a bounded custom date/time/duration picker; calls `finalizeEvent` |
+| `src/components/FinalizedBanner.tsx` | v1.1: replaces `BestTimesPanel` once `event.finalized` is set — final window in viewer TZ, live attendance count, `ExportSheet` trigger, host-only `reopenEvent` button |
+
+**Removed in the v1.1 follow-up:** `src/hooks/useMinWidth.ts` (the `≥1024px` media-query hook that
+drove the old side-by-side dual-grid layout) was deleted once `AvailabilityGrid` dropped that
+layout — no remaining consumers.
 
 ## Best-times & export are client-side
 
@@ -227,6 +256,30 @@ server-side state, and no privileged computation — it is pure date/string form
 already has all the inputs for — so shipping it as a client library avoids a network round-trip,
 a cold-start, and a function to maintain for zero benefit.
 
+## Garbage collection (v1.1)
+
+`cleanupExpiredEvents` no longer runs a targeted `expiresAt`-only query. It now does a **full
+collection scan** of `events` daily at 03:00 UTC, evaluates the pure predicate
+`shouldDeleteEvent(event, nowMs)` (`functions/src/lib/gc.ts`) against every doc in-process (inside
+the scheduled function, not a Firestore query filter), and `recursiveDelete`s whatever matches —
+same deletion mechanics as before, broader selection logic. No new Firestore index is needed since
+the scan itself is unchanged (a `collection('events').get()` with no `where`).
+
+`shouldDeleteEvent` returns `true` when either is true:
+
+1. **Hard cap (unchanged):** `expiresAt <= now` (`createdAt` + 90 days).
+2. **Idle + fully past (new):** the event has calendar dates (`mode !== 'weekdays_recurring'`
+   — recurring events have no calendar dates to check and fall back to the hard cap only), the
+   *last* of those dates has fully ended — `Date.parse(`${lastDate}T23:59:59.999Z`) < now`, a
+   deliberate **UTC end-of-day simplification** rather than the event's own timezone wall-clock —
+   **and** `(lastVisitedAt ?? createdAt)` is more than **30 days** (`IDLE_MS`) before `now`.
+
+So a finished event that nobody has revisited is now reclaimed well before its 90-day cap; an
+event still being visited (`lastVisitedAt` refreshed by `touchLastVisited` on each page load, at
+most once per 24h) is never idle-deleted regardless of how far in the past its dates are, only the
+hard cap can remove it. `weekdays_recurring` events are exempt from the idle rule entirely — they
+have no fixed calendar dates to judge "fully passed."
+
 ## CI/CD
 
 Two GitHub Actions workflows (`.github/workflows/`), both `actions/setup-node@v4` on Node 20:
@@ -247,7 +300,11 @@ an `if` guard on `head.repo.full_name`):
 3. `npm run build` (root, same `VITE_FIREBASE_*` secrets)
 4. `FirebaseExtended/action-hosting-deploy@v0` with `channelId: live` → production Hosting
 5. `firebase-tools@latest deploy --only functions` (both `createEvent` and `cleanupExpiredEvents`)
-6. A follow-up `gcloud run services add-iam-policy-binding` step idempotently re-grants
+6. **(v1.1)** `firebase-tools@latest deploy --only firestore:rules,database` — deploys
+   `firestore.rules` and `database.rules.json` on every merge, so the `eventOpen()`/`finalized`
+   rule changes (and any future rules edit) ship automatically instead of requiring a manual
+   `firebase deploy --only firestore:rules,database`.
+7. A follow-up `gcloud run services add-iam-policy-binding` step idempotently re-grants
    `allUsers: run.invoker` on the `createevent` Cloud Run service — gen-2 callables can silently
    lose the public-invoker binding on redeploy via service account, so this step guards against
    `createEvent` becoming unreachable after a deploy.

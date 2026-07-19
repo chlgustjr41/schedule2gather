@@ -8,8 +8,7 @@ import { formatSlotDateLabel, formatSlotTimeLabel } from '@/lib/timezoneSlots'
 import { getMonthPages, getVisibleColumns, getWeekPages, type CalendarColumn } from '@/lib/calendarPages'
 import CellTooltip from '@/components/CellTooltip'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { useMinWidth } from '@/hooks/useMinWidth'
-import { heatColor, mineColor } from '@/lib/heatColor'
+import { mineColor } from '@/lib/heatColor'
 import Button from '@/components/ui/Button'
 import SegmentedControl from '@/components/ui/SegmentedControl'
 
@@ -20,9 +19,11 @@ const UNDO_DEPTH = 50
 
 interface AvailabilityGridProps {
   viewerTimezone: string
+  /** Finalized events render the grid non-interactive. */
+  readOnly?: boolean
 }
 
-export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridProps) {
+export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: AvailabilityGridProps) {
   const event = useEventStore((s) => s.event)
   const myParticipant = useEventStore((s) => s.myParticipant)
   const participants = useEventStore((s) => s.participants)
@@ -40,8 +41,6 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   const isMobile = useIsMobile()
   const [pageSize, setPageSize] = useState<7 | 31>(7)
   const [pageIdx, setPageIdx] = useState(0)
-  const [layer, setLayer] = useState<'mine' | 'group'>('mine')
-  const dualGrid = useMinWidth(1024)
   // Track previous participantId to reset stacks when participant changes (render-phase pattern)
   const prevParticipantIdRef = useRef<string | undefined>(undefined)
   const currentParticipantId = myParticipant?.participantId
@@ -98,6 +97,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   }
 
   const effectivePaintMode = isMobile ? (viewMode === 'week' ? true : paintMode) : true
+  const interactive = !readOnly
   const showPaintToggle = isMobile && viewMode === 'month'
   const stickyTimeColumn = isMobile && viewMode === 'month'
   const scrollableMonth = isMobile && viewMode === 'month'
@@ -106,25 +106,6 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     if (!event || !myParticipant) return null
     return unpack(myParticipant.availability, event.slotCount)
   }, [event, myParticipant])
-
-  const aggregateCounts = useMemo(() => {
-    if (!event) return []
-    const counts = new Array(event.slotCount).fill(0)
-    for (const p of participants) {
-      const bits = unpack(p.availability, event.slotCount)
-      for (let i = 0; i < event.slotCount; i++) {
-        if (bits[i]) counts[i] += 1
-      }
-    }
-    if (draftBits && myParticipant) {
-      const myBits = unpack(myParticipant.availability, event.slotCount)
-      for (let i = 0; i < event.slotCount; i++) {
-        if (myBits[i] && !draftBits[i]) counts[i] -= 1
-        else if (!myBits[i] && draftBits[i]) counts[i] += 1
-      }
-    }
-    return counts
-  }, [event, participants, draftBits, myParticipant])
 
   const pushHistory = useCallback((snapshot: string) => {
     setUndoStack((prev) => {
@@ -359,11 +340,11 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
     }
   }
 
-  const renderTable = (tableLayer: 'mine' | 'group', interactive: boolean) => (
+  const renderTable = () => (
     <table
       ref={interactive ? tableRef : undefined}
       role="grid"
-      aria-label={`${tableLayer === 'mine' ? 'My availability' : 'Group availability'} for ${event.name}`}
+      aria-label={`My availability for ${event.name}`}
       aria-rowcount={spd + 1}
       aria-colcount={event.dates.length + 1}
       className={`border-collapse select-none ${scrollableMonth ? '' : 'mx-auto'}`}
@@ -434,15 +415,14 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
               const dateIdx = col.eventDateIdx
               const slotIdx = dateIdx * spd + timeIdx
               const mine = myDisplayBits[slotIdx]
-              const count = aggregateCounts[slotIdx]
-              const bg = tableLayer === 'mine' ? mineColor(mine) : heatColor(count, participants.length)
+              const bg = mineColor(mine)
               return (
                 <td
                   key={slotIdx}
                   role="gridcell"
                   tabIndex={interactive && slotIdx === focusedSlot ? 0 : -1}
-                  aria-selected={tableLayer === 'mine' ? mine : undefined}
-                  aria-label={`${formatSlotDateLabel(event, dateIdx, viewerTimezone)} ${formatSlotTimeLabel(event, timeIdx, viewerTimezone)} — ${tableLayer === 'mine' ? (mine ? 'available' : 'unavailable') : `${count} of ${participants.length} available`}`}
+                  aria-selected={mine}
+                  aria-label={`${formatSlotDateLabel(event, dateIdx, viewerTimezone)} ${formatSlotTimeLabel(event, timeIdx, viewerTimezone)} — ${mine ? 'available' : 'unavailable'}`}
                   data-slot-idx={interactive ? slotIdx : undefined}
                   onFocus={interactive ? () => setFocusedSlot(slotIdx) : undefined}
                   onPointerDown={interactive ? handlePointerDown(slotIdx) : undefined}
@@ -452,11 +432,13 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
                     backgroundColor: bg,
                     touchAction: interactive && effectivePaintMode ? 'none' : 'auto',
                   }}
-                  className="w-12 h-6 border border-line cursor-pointer relative focus:outline-2 focus:outline-primary focus:outline-offset-[-2px]"
+                  className={`w-12 h-6 border border-line relative focus:outline-2 focus:outline-primary focus:outline-offset-[-2px] ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
                 >
-                  {tableLayer === 'group' && tooltipSlot === slotIdx && !draftBits && (
+                  {tooltipSlot === slotIdx && !draftBits && (
                     <CellTooltip
-                      names={participants.filter((p) => unpack(p.availability, event.slotCount)[slotIdx]).map((p) => p.name)}
+                      names={participants
+                        .filter((p) => unpack(p.availability, event.slotCount)[slotIdx])
+                        .map((p) => p.name)}
                     />
                   )}
                 </td>
@@ -469,7 +451,8 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
   )
 
   return (
-    <div className="p-4">
+    <div className="pt-2">
+      {interactive && (
       <div className="flex justify-center gap-1 sm:gap-2 mb-3 flex-wrap">
         {isMobile && (
           <SegmentedControl
@@ -520,38 +503,11 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
           Redo ↷
         </Button>
       </div>
-      {dualGrid ? (
-        <div className="flex justify-center gap-10 overflow-x-auto">
-          <div>
-            <div className="text-[10px] font-extrabold uppercase tracking-widest text-ink-muted text-center mb-2">
-              ✏️ My times
-            </div>
-            {renderTable('mine', true)}
-          </div>
-          <div>
-            <div className="text-[10px] font-extrabold uppercase tracking-widest text-ink-muted text-center mb-2">
-              👥 Group
-            </div>
-            {renderTable('group', false)}
-          </div>
-        </div>
-      ) : (
-        <>
-          <SegmentedControl
-            className="max-w-xs mx-auto mb-3"
-            options={[
-              { value: 'mine', label: '✏️ My times' },
-              { value: 'group', label: '👥 Group' },
-            ]}
-            value={layer}
-            onChange={setLayer}
-          />
-          <div className="overflow-x-auto">
-            {renderTable(layer, layer === 'mine')}
-          </div>
-        </>
       )}
-      {showPaintToggle && (
+      <div className="overflow-x-auto">
+        {renderTable()}
+      </div>
+      {interactive && showPaintToggle && (
         <div className="flex justify-center mt-3">
           <Button
             variant={paintMode ? 'primary' : 'secondary'}
@@ -569,7 +525,7 @@ export default function AvailabilityGrid({ viewerTimezone }: AvailabilityGridPro
           </Button>
         </div>
       )}
-      {isMobile && totalPages > 1 && (
+      {interactive && isMobile && totalPages > 1 && (
         <div className="flex justify-center items-center gap-3 mt-3 pb-2">
           <Button
             variant="secondary"

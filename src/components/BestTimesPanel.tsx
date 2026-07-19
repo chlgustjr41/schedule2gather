@@ -6,16 +6,20 @@ import { windowUtcRange } from '@/lib/ics'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import ExportSheet from '@/components/ExportSheet'
+import FinalizeSheet from '@/components/FinalizeSheet'
 
 interface BestTimesPanelProps {
   viewerTimezone: string
   shareUrl: string
+  isHost: boolean
+  slug: string
 }
 
-export default function BestTimesPanel({ viewerTimezone, shareUrl }: BestTimesPanelProps) {
+export default function BestTimesPanel({ viewerTimezone, shareUrl, isHost, slug }: BestTimesPanelProps) {
   const event = useEventStore((s) => s.event)
   const participants = useEventStore((s) => s.participants)
   const [exportWindow, setExportWindow] = useState<BestWindow | null>(null)
+  const [showFinalize, setShowFinalize] = useState(false)
 
   const windows = useMemo(() => {
     if (!event) return []
@@ -73,6 +77,14 @@ export default function BestTimesPanel({ viewerTimezone, shareUrl }: BestTimesPa
           shareUrl={shareUrl}
           onClose={() => setExportWindow(null)}
         />
+      )}
+      {isHost && (
+        <Button size="sm" className="mt-3" onClick={() => setShowFinalize(true)}>
+          🏁 Finish vote
+        </Button>
+      )}
+      {showFinalize && (
+        <FinalizeSheet slug={slug} viewerTimezone={viewerTimezone} onClose={() => setShowFinalize(false)} />
       )}
     </Card>
   )

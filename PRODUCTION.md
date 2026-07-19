@@ -393,6 +393,40 @@ Phase 0–3 codebase — no Firestore schema changes.
 Full spec: `docs/superpowers/specs/2026-07-18-redesign-design.md`. Implementation plan:
 `docs/superpowers/plans/2026-07-18-redesign.md`.
 
+### 2026-07 v1.1 ✅ COMPLETE 2026-07
+
+**Goal:** Five follow-up fixes from user feedback on the shipped redesign — no other layout
+changes, no cross-device identity or presence changes.
+
+- ✅ **Range date selection** in the create flow: a `Pick days | Date range` toggle above the
+  calendar; completing a start→end `DayPicker` range merges the whole span (past days excluded)
+  into the existing date selection via the pure `mergeRangeIntoDates` helper (`src/lib/dateRange.ts`).
+- ✅ **Group-first stacked layout**: the old Me/Group `SegmentedControl` and the `≥1024px`
+  side-by-side dual grid are gone. Every viewport now renders the same order — header → share →
+  Best times (or Finalized banner) → 👥 Group overlap (`GroupHeatmap`, transposed horizontal
+  per-date strips, read-only) → ✏️ My times (`AvailabilityGrid`, mine-only) → comments.
+  `useMinWidth.ts` was deleted with its only consumer.
+- ✅ **Own-cell tooltip**: the who's-free tooltip (`CellTooltip`), previously only on the group
+  heatmap, now also appears centered above hovered/focused cells on the viewer's own My-times
+  grid; the group strips got an equivalent inline tooltip.
+- ✅ **Host finish-vote flow**: a host-only 🏁 Finish vote button opens `FinalizeSheet` (pick a
+  suggested window or a bounded custom time); confirming writes `events/{slug}.finalized` and
+  every viewer live-swaps to `FinalizedBanner` (add-to-calendar, host-only reopen). The lock is
+  **server-enforced**: `firestore.rules`' `eventOpen()` gate rejects participant create/update
+  while `finalized` is set, not just a client-side UI affordance. New visitors to a finalized event
+  skip `JoinScreen` entirely.
+- ✅ **Idle-event garbage collection**: `cleanupExpiredEvents` still enforces the 90-day
+  `expiresAt` hard cap, and now additionally deletes events whose calendar dates have all passed
+  (UTC end-of-day simplification) **and** that nobody has visited (`lastVisitedAt`, falling back to
+  `createdAt`) in 30 days — pure predicate in `functions/src/lib/gc.ts`
+  (`shouldDeleteEvent`), evaluated via a daily full collection scan. `weekdays_recurring` events
+  are hard-cap-only (no calendar dates to judge "fully passed").
+- ✅ **CI/CD**: the merge workflow now also runs
+  `firebase deploy --only firestore:rules,database` on every push to `main`, so rules changes
+  (including the new `eventOpen()`/`finalized` logic) ship without a manual deploy step.
+
+Full spec: `docs/superpowers/specs/2026-07-18-v1.1-followup-design.md`.
+
 ---
 
 ## 13. Implementation Discipline

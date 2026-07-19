@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DayPicker } from 'react-day-picker'
+import { DayPicker, type DateRange } from 'react-day-picker'
 import 'react-day-picker/style.css'
 import {
   addMonths,
@@ -12,7 +12,9 @@ import {
   startOfMonth,
 } from 'date-fns'
 import { createEvent } from '@/services/eventService'
+import { useAuthStore } from '@/stores/authStore'
 import { COMMON_TIMEZONES, detectTimezone, formatTimezoneLabel } from '@/lib/timezones'
+import { mergeRangeIntoDates } from '@/lib/dateRange'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
@@ -31,6 +33,9 @@ function formatHour(h: number): string {
 export default function CreateEventForm() {
   const navigate = useNavigate()
   const isMobile = useIsMobile()
+  // Anonymous sign-in runs on app load; creating an event before it resolves
+  // would hit the callable unauthenticated (401). Gate the CTA until ready.
+  const authedUser = useAuthStore((s) => s.user)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -42,6 +47,8 @@ export default function CreateEventForm() {
   const [timezone, setTimezone] = useState(detectedTz)
   const [selectedDates, setSelectedDates] = useState<Date[]>([])
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [pickMode, setPickMode] = useState<'days' | 'range'>('days')
+  const [rangeDraft, setRangeDraft] = useState<DateRange | undefined>(undefined)
 
   const today = useMemo(() => startOfDay(new Date()), [])
   const nextMonth = useMemo(() => addMonths(today, 1), [today])
@@ -140,13 +147,28 @@ export default function CreateEventForm() {
       />
 
       <Card>
+        <SegmentedControl
+          className="max-w-[260px] mb-3"
+          options={[
+            { value: 'days', label: 'Pick days' },
+            { value: 'range', label: 'Date range' },
+          ]}
+          value={pickMode}
+          onChange={(v) => {
+            setPickMode(v)
+            setRangeDraft(undefined)
+          }}
+        />
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-x-6 gap-y-2 mb-3">
           {renderQuickRow(today)}
           {renderQuickRow(nextMonth)}
           {selectedDates.length > 0 && (
             <button
               type="button"
-              onClick={() => setSelectedDates([])}
+              onClick={() => {
+                setSelectedDates([])
+                setRangeDraft(undefined)
+              }}
               className="text-xs text-ink-muted hover:text-ink underline sm:ml-auto self-start sm:self-auto"
             >
               Clear all
@@ -154,16 +176,43 @@ export default function CreateEventForm() {
           )}
         </div>
         <div className="rdp-side-by-side">
-          <DayPicker
-            mode="multiple"
-            numberOfMonths={isMobile ? 1 : 2}
-            selected={selectedDates}
-            onSelect={(dates) => setSelectedDates(dates ?? [])}
-            disabled={{ before: today }}
-            startMonth={today}
-          />
+          {pickMode === 'days' ? (
+            <DayPicker
+              mode="multiple"
+              numberOfMonths={isMobile ? 1 : 2}
+              selected={selectedDates}
+              onSelect={(dates) => setSelectedDates(dates ?? [])}
+              disabled={{ before: today }}
+              startMonth={today}
+            />
+          ) : (
+            <DayPicker
+              mode="range"
+              numberOfMonths={isMobile ? 1 : 2}
+              selected={rangeDraft}
+              onSelect={(range) => {
+                // day-picker v9 reports the FIRST click as {from: d, to: d} — a
+                // range is only complete once the user picks a different end day.
+                if (range?.from && range.to && range.from.getTime() !== range.to.getTime()) {
+                  const from = range.from
+                  const to = range.to
+                  setSelectedDates((prev) => mergeRangeIntoDates(prev, from, to, today))
+                  setRangeDraft(undefined)
+                } else {
+                  setRangeDraft(range)
+                }
+              }}
+              disabled={{ before: today }}
+              startMonth={today}
+            />
+          )}
         </div>
         <p className="mt-1 text-xs text-ink-muted">{selectedDates.length} selected</p>
+        {pickMode === 'range' && (
+          <p className="text-xs text-ink-muted">
+            Tap a start date, then an end date — the whole span is added to your selection.
+          </p>
+        )}
       </Card>
 
       <div className="bg-line/40 rounded-[12px]">
@@ -230,8 +279,8 @@ export default function CreateEventForm() {
 
       {error && <p className="text-danger text-sm">{error}</p>}
 
-      <Button size="lg" type="submit" disabled={submitting}>
-        {submitting ? 'Creating…' : 'Create event'}
+      <Button size="lg" type="submit" disabled={submitting || !authedUser}>
+        {!authedUser ? 'Connecting…' : submitting ? 'Creating…' : 'Create event'}
       </Button>
     </form>
   )
