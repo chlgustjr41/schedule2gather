@@ -17,6 +17,11 @@ const UNDO_HOTKEY_LABEL = IS_MAC ? '⌘Z' : 'Ctrl+Z'
 const REDO_HOTKEY_LABEL = IS_MAC ? '⌘⇧Z' : 'Ctrl+Shift+Z'
 const UNDO_DEPTH = 50
 
+const ZOOM_LEVELS = ['sm', 'md', 'lg'] as const
+type Zoom = (typeof ZOOM_LEVELS)[number]
+const CELL_CLASS: Record<Zoom, string> = { sm: 'w-8 h-5', md: 'w-12 h-6', lg: 'w-16 h-10' }
+const LABEL_CLASS: Record<Zoom, string> = { sm: 'text-[10px]', md: 'text-xs', lg: 'text-sm' }
+
 interface AvailabilityGridProps {
   viewerTimezone: string
   /** Finalized events render the grid non-interactive. */
@@ -41,6 +46,26 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   const isMobile = useIsMobile()
   const [pageSize, setPageSize] = useState<7 | 31>(7)
   const [pageIdx, setPageIdx] = useState(0)
+  const [zoom, setZoom] = useState<Zoom>(() => {
+    try {
+      const z = localStorage.getItem('s2g-grid-zoom')
+      return z === 'sm' || z === 'lg' ? z : 'md'
+    } catch {
+      return 'md'
+    }
+  })
+  const [eventDaysOnly, setEventDaysOnly] = useState(true)
+
+  const changeZoom = (dir: 1 | -1) =>
+    setZoom((z) => {
+      const next = ZOOM_LEVELS[ZOOM_LEVELS.indexOf(z) + dir] ?? z
+      try {
+        localStorage.setItem('s2g-grid-zoom', next)
+      } catch {
+        // persistence is best-effort
+      }
+      return next
+    })
   // Track previous participantId to reset stacks when participant changes (render-phase pattern)
   const prevParticipantIdRef = useRef<string | undefined>(undefined)
   const currentParticipantId = myParticipant?.participantId
@@ -71,7 +96,17 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     [event],
   )
   const viewMode: 'week' | 'month' = pageSize === 7 ? 'week' : 'month'
-  const pages = isMobile ? (viewMode === 'week' ? weekPages : monthPages) : []
+  const rawPages = useMemo(
+    () => (isMobile ? (viewMode === 'week' ? weekPages : monthPages) : []),
+    [isMobile, viewMode, weekPages, monthPages],
+  )
+  const pages = useMemo(() => {
+    if (!event || !eventDaysOnly || rawPages.length === 0) return rawPages
+    const filtered = rawPages.filter((pageStart) =>
+      getVisibleColumns(pageStart, viewMode, event.dates).some((c) => c.eventDateIdx !== -1),
+    )
+    return filtered.length > 0 ? filtered : rawPages
+  }, [rawPages, eventDaysOnly, event, viewMode])
   const totalPages = pages.length > 0 ? pages.length : 1
   const safePageIdx = Math.min(pageIdx, Math.max(0, pages.length - 1))
   const currentPageStart = pages.length > 0 ? pages[safePageIdx] : null
@@ -88,8 +123,11 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       }))
     }
     if (!currentPageStart) return []
-    return getVisibleColumns(currentPageStart, viewMode, event.dates)
-  }, [event, isMobile, currentPageStart, viewMode])
+    const cols = getVisibleColumns(currentPageStart, viewMode, event.dates)
+    if (!eventDaysOnly) return cols
+    const filtered = cols.filter((c) => c.eventDateIdx !== -1)
+    return filtered.length > 0 ? filtered : cols
+  }, [event, isMobile, currentPageStart, viewMode, eventDaysOnly])
 
   // Clamp pageIdx when pageSize or pages change.
   if (pageIdx >= totalPages) {
@@ -395,7 +433,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               role="rowheader"
               scope="row"
               onClick={interactive ? () => void toggleRow(timeIdx) : undefined}
-              className={`text-xs text-ink-muted pr-2 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-canvas z-10' : ''}`}
+              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-2 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-canvas z-10' : ''}`}
               title={interactive ? 'Click to toggle this entire row' : undefined}
             >
               {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
@@ -408,7 +446,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                   <td
                     key={`${col.dateStr}-${timeIdx}`}
                     aria-disabled="true"
-                    className="w-12 h-6 border border-line bg-line/40"
+                    className={`${CELL_CLASS[zoom]} border border-line bg-line/40`}
                   />
                 )
               }
@@ -432,7 +470,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                     backgroundColor: bg,
                     touchAction: interactive && effectivePaintMode ? 'none' : 'auto',
                   }}
-                  className={`w-12 h-6 border border-line relative focus:outline-2 focus:outline-primary focus:outline-offset-[-2px] ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
+                  className={`${CELL_CLASS[zoom]} border border-line relative focus:outline-2 focus:outline-primary focus:outline-offset-[-2px] ${interactive ? 'cursor-pointer' : 'cursor-default'}`}
                 >
                   {tooltipSlot === slotIdx && !draftBits && (
                     <CellTooltip
@@ -502,7 +540,44 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
         >
           Redo ↷
         </Button>
+        <Button variant="secondary" size="sm" aria-label="Zoom out" disabled={zoom === 'sm'} onClick={() => changeZoom(-1)}>
+          −
+        </Button>
+        <Button variant="secondary" size="sm" aria-label="Zoom in" disabled={zoom === 'lg'} onClick={() => changeZoom(1)}>
+          +
+        </Button>
+        {isMobile && (
+          <Button
+            variant={eventDaysOnly ? 'primary' : 'secondary'}
+            size="sm"
+            aria-pressed={eventDaysOnly}
+            onClick={() => setEventDaysOnly((v) => !v)}
+          >
+            Event days only
+          </Button>
+        )}
       </div>
+      )}
+      {/* Read-only (finalized) grids keep the view controls — only editing tools hide. */}
+      {!interactive && (
+        <div className="flex justify-center gap-1 sm:gap-2 mb-3 flex-wrap">
+          <Button variant="secondary" size="sm" aria-label="Zoom out" disabled={zoom === 'sm'} onClick={() => changeZoom(-1)}>
+            −
+          </Button>
+          <Button variant="secondary" size="sm" aria-label="Zoom in" disabled={zoom === 'lg'} onClick={() => changeZoom(1)}>
+            +
+          </Button>
+          {isMobile && (
+            <Button
+              variant={eventDaysOnly ? 'primary' : 'secondary'}
+              size="sm"
+              aria-pressed={eventDaysOnly}
+              onClick={() => setEventDaysOnly((v) => !v)}
+            >
+              Event days only
+            </Button>
+          )}
+        </div>
       )}
       <div className="overflow-x-auto">
         {renderTable()}

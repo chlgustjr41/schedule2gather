@@ -291,6 +291,41 @@ No props. A `react-router-dom` `Link` to `/` rendering `schedule2gather` with th
 <Wordmark />
 ```
 
+### `WheelPicker.tsx` (v1.2)
+
+| Prop | Type | Default |
+|---|---|---|
+| `options` | `{ value: number; label: string }[]` | required |
+| `value` | `number` | required |
+| `onChange` | `(value: number) => void` | required |
+| `ariaLabel` | `string` | required |
+
+A generic snap-scrolling column (touch-first). Fixed 40px row height, 5 rows visible (200px
+container) with 80px top/bottom spacers so the first/last options can still center; CSS
+`snap-y snap-mandatory` / `snap-center`. Selection commits when scrolling settles — the
+`scrollend` event where supported, else a 150ms scroll-idle debounce — computed as
+`round(scrollTop / 40)` and clamped to the option bounds; tapping an option also selects it
+directly. Controlled: an external `value` change (e.g. the sibling wheel auto-pushing this one)
+smooth-scrolls to the new position without re-emitting `onChange` (a `suppress` ref guards
+against feedback loops). Renders nothing if `options` is empty. `role="listbox"` on the
+container, `role="option"` / `aria-selected` on each `<button>`.
+
+**Mobile-only usage convention:** `WheelPicker` is not a universal replacement for `<select>` —
+its only current consumer, `CreateEventForm`'s Earliest/Latest hour fields, renders it exclusively
+when `useIsMobile()` is true. Desktop keeps the native `<select>` dropdowns for the same fields
+(see `docs/ux-flows.md`). Follow this convention for future wheel-picker usage: gate on
+`useIsMobile()`, keep a native-control fallback for desktop.
+
+```tsx
+// src/components/CreateEventForm.tsx (Earliest hour, mobile only)
+<WheelPicker
+  ariaLabel="Earliest hour"
+  options={HOURS_START}
+  value={startHour}
+  onChange={(v) => changeHours('start', v)}
+/>
+```
+
 ## Component reference (`src/components/`, v1.1 additions)
 
 These aren't `ui/` primitives — they're event-page-specific components introduced by the v1.1

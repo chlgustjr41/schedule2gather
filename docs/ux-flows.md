@@ -41,7 +41,29 @@ days excluded) into the same `selectedDates` set day-picking uses, via the pure
 `mergeRangeIntoDates` helper (`src/lib/dateRange.ts`), then resets the range draft so another span
 can be added. Switching modes never discards existing selections; "Clear all" clears both the
 selection and any in-progress range draft. The per-month "All / Weekdays / Weekends" quick-select
-buttons and the "N selected" count work identically in both modes.
+buttons and the "N selected" count work identically in both modes. On mobile (`<768px`), the
+calendar's day cells get comfortable touch targets — **42×42px minimum**, 15px font, a 4px
+inter-cell gap — via a `max-width: 767px` rule in `src/index.css`; desktop keeps the tighter
+default spacing.
+
+**Selected-dates preview** (v1.2): once at least one date is picked, a chips row appears between
+the calendar and the "N selected" line — one removable chip per date (`Mon, Jul 27` + a `×`
+button), sorted ascending, working identically in both pick modes (removing a chip only ever edits
+`selectedDates`, never `rangeDraft`). On desktop the row wraps (`flex-wrap`); on phones it's a
+single horizontally-scrollable line (`overflow-x-auto flex-nowrap`) so a long run of dates stays
+thumb-swipeable instead of pushing the page taller.
+
+**Advanced settings time range** (v1.2, mobile only): when `useIsMobile()`, the Earliest/Latest
+fields in the Advanced settings panel render as a pair of side-by-side `WheelPicker` scroll wheels
+instead of native `<select>` dropdowns — desktop is unchanged and keeps the selects. Validity is
+enforced by construction, not rejection: the pure `clampTimeRange()` helper
+(`src/lib/timeRange.ts`) guarantees `start < end` by pushing the *sibling* bound out of the way
+whenever a wheel change would violate it (e.g. dragging Earliest past the current Latest bumps
+Latest forward by an hour) rather than blocking the scroll or showing an error. When a change
+triggers that auto-push, a hint line appears under the wheels for ~2.5 seconds: "Adjusted — the
+window must be at least 1 hour." `handleSubmit` still carries a defense-in-depth check
+(`startHour >= endHour` → "Latest must be after earliest") in case construction is ever bypassed,
+and the server validation in `createEvent` remains the final word.
 
 ## Invitee journey
 
@@ -77,6 +99,20 @@ e.g. "19:00 · Jacob, Sam · 2/3") and the viewer's own My-times cells (just the
 free in that slot, via the existing `CellTooltip`). There is no explicit save step anywhere in
 either flow: every committed stroke calls
 `updateMyAvailability`, which writes straight to Firestore.
+
+**Grid view options** (v1.2, `AvailabilityGrid` toolbar): a **− / +** zoom control cycles the grid
+through three persisted cell sizes — `sm` (`w-8 h-5`), `md` (`w-12 h-6`, the pre-v1.2 default),
+`lg` (`w-16 h-10`) — with the row-header/time-label text stepping between `text-[10px]` /
+`text-xs` / `text-sm` to match. The buttons disable at each end of the scale. The chosen zoom
+persists to `localStorage['s2g-grid-zoom']` (best-effort, wrapped in try/catch for private
+browsing; an unrecognized stored value falls back to `md`) and is available at every viewport, not
+just mobile. On mobile only, a **"Event days only"** toggle (`aria-pressed`, default **on**) sits
+alongside it: when on, the paginated week/month grid filters out columns for dates outside the
+event (`eventDateIdx === -1`) and drops any week/month page that would contain zero event dates
+from the Prev/Next pager entirely, so a sparse event (e.g. three Saturdays) doesn't force
+thumb-paging through empty weeks; switching it off restores the full calendar, greyed
+out-of-range columns included. If filtering would ever leave zero pages, the toggle is ignored and
+the full page set renders instead (defensive — shouldn't happen for a valid event).
 
 ## Finish the vote (host)
 
@@ -140,8 +176,9 @@ grid and its `useMinWidth` hook are gone. The remaining responsive differences:
 |---|---|
 | `<640px` (Tailwind default, no `sm:`) | `BottomSheet` (used by `ExportSheet` and `FinalizeSheet`) renders as a sheet anchored to the bottom of the viewport |
 | `≥640px` (Tailwind `sm:`) | `BottomSheet` renders as a centered modal — see `docs/design-system.md` "Documented deviations" for why this is 640px rather than the spec's originally-stated 768px |
-| `<768px` (`useIsMobile()` true) | Create-flow calendar shows 1 month at a time; the event-page My-times grid switches to paginated week/month view (`SegmentedControl` for Week/Month, Prev/Next paging, `X/Y` page indicator) |
-| `≥768px` | Create-flow calendar shows 2 months side by side; the event-page My-times grid shows every event date in one unpaginated table |
+| `<768px` (`useIsMobile()` true) | Create-flow calendar shows 1 month at a time, with ≥42px day touch targets and a horizontally-scrollable date-chips row; Advanced settings' Earliest/Latest fields render as `WheelPicker` scroll wheels; the event-page My-times grid switches to paginated week/month view (`SegmentedControl` for Week/Month, Prev/Next paging, `X/Y` page indicator) with an added "Event days only" toggle (default on) |
+| `≥768px` | Create-flow calendar shows 2 months side by side with native `<select>` Earliest/Latest dropdowns; the event-page My-times grid shows every event date in one unpaginated table (no "Event days only" toggle — nothing to filter) |
+| all widths | The grid's − / + zoom control (3 persisted cell sizes, `localStorage['s2g-grid-zoom']`) is available regardless of breakpoint |
 
 ## Accessibility
 
