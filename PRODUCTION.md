@@ -427,6 +427,30 @@ changes, no cross-device identity or presence changes.
 
 Full spec: `docs/superpowers/specs/2026-07-18-v1.1-followup-design.md`.
 
+### 2026-07 v1.2 ✅ COMPLETE 2026-07
+
+**Goal:** Four mobile-experience upgrades from user feedback on the shipped redesign — client-only
+release, no backend/rules/Functions changes.
+
+- ✅ **Mobile wheel time picker**: a new generic snap-scroll primitive (`src/components/ui/
+  WheelPicker.tsx`) replaces the native Earliest/Latest `<select>`s in `CreateEventForm`'s Advanced
+  settings on mobile only (`useIsMobile()`); desktop keeps the selects. Validity is enforced by
+  construction rather than rejection — the pure `clampTimeRange()` helper
+  (`src/lib/timeRange.ts`) pushes the sibling bound out of the way whenever a wheel change would
+  otherwise produce an invalid range, with a ~2.5s hint ("Adjusted — the window must be at least
+  1 hour.") shown when that auto-push happens.
+- ✅ **Touch-friendly calendar targets**: mobile day cells in the create-flow calendar grow to a
+  42×42px minimum tap target (CSS-only, `src/index.css`, `max-width: 767px`).
+- ✅ **Grid view options** (`AvailabilityGrid`): a − / + zoom control cycles three persisted cell
+  sizes (`localStorage['s2g-grid-zoom']`, available at every viewport) and, on mobile, an "Event
+  days only" toggle (default on) hides out-of-range columns and skips empty week/month pages in
+  the paginated grid.
+- ✅ **Selected-dates preview**: a removable chips row (sorted ascending, `×` to remove) appears
+  below the create-flow calendar once dates are picked — wraps on desktop, horizontally scrollable
+  on phones.
+
+Full spec: `docs/superpowers/specs/2026-07-19-v1.2-mobile-ux-design.md`.
+
 ---
 
 ## 13. Implementation Discipline
