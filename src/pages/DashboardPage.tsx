@@ -21,6 +21,39 @@ type LoadState =
   | { phase: 'error' }
   | { phase: 'ready'; events: MyEvent[] }
 
+// Action-typed updates apply against the LATEST state, so overlapping actions
+// (e.g. a reopen racing a delete) can never clobber each other's rows.
+type LoadAction =
+  | { type: 'loading' }
+  | { type: 'error' }
+  | { type: 'ready'; events: MyEvent[] }
+  | { type: 'remove'; slug: string }
+  | { type: 'reopen'; slug: string }
+
+function reduceLoad(state: LoadState, action: LoadAction): LoadState {
+  switch (action.type) {
+    case 'loading':
+      return { phase: 'loading' }
+    case 'error':
+      return { phase: 'error' }
+    case 'ready':
+      return { phase: 'ready', events: action.events }
+    case 'remove':
+      return state.phase === 'ready'
+        ? { phase: 'ready', events: state.events.filter((ev) => ev.slug !== action.slug) }
+        : state
+    case 'reopen':
+      return state.phase === 'ready'
+        ? {
+            phase: 'ready',
+            events: state.events.map((ev) =>
+              ev.slug === action.slug ? { ...ev, finalized: null } : ev,
+            ),
+          }
+        : state
+  }
+}
+
 function dateRangeLabel(ev: MyEvent): string {
   if (ev.mode === 'weekdays_recurring') return 'Weekly'
   const first = ev.dates[0]
@@ -39,7 +72,7 @@ export default function DashboardPage() {
   const uid = googleUser ? user.uid : null
 
   // useReducer keeps the repo's strict set-state-in-effect lint rule happy.
-  const [state, dispatch] = useReducer((_: LoadState, next: LoadState) => next, { phase: 'idle' })
+  const [state, dispatch] = useReducer(reduceLoad, { phase: 'idle' })
   const [counts, setCounts] = useState<Counts>({})
   const [confirmDelete, setConfirmDelete] = useState<MyEvent | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -50,11 +83,11 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!uid) return
     let cancelled = false
-    dispatch({ phase: 'loading' })
+    dispatch({ type: 'loading' })
     listMyEvents(uid)
       .then((events) => {
         if (cancelled) return
-        dispatch({ phase: 'ready', events })
+        dispatch({ type: 'ready', events })
         for (const ev of events) {
           void countParticipants(ev.slug)
             .then((c) => {
@@ -64,7 +97,7 @@ export default function DashboardPage() {
         }
       })
       .catch(() => {
-        if (!cancelled) dispatch({ phase: 'error' })
+        if (!cancelled) dispatch({ type: 'error' })
       })
     return () => {
       cancelled = true
@@ -85,12 +118,7 @@ export default function DashboardPage() {
     setActionError(null)
     try {
       await reopenEvent(slug)
-      if (state.phase === 'ready') {
-        dispatch({
-          phase: 'ready',
-          events: state.events.map((ev) => (ev.slug === slug ? { ...ev, finalized: null } : ev)),
-        })
-      }
+      dispatch({ type: 'reopen', slug })
     } catch {
       setActionError('Couldn’t reopen — try again.')
     }
@@ -102,12 +130,12 @@ export default function DashboardPage() {
     setActionError(null)
     try {
       await deleteEventRemote(confirmDelete.slug)
-      if (state.phase === 'ready') {
-        dispatch({
-          phase: 'ready',
-          events: state.events.filter((ev) => ev.slug !== confirmDelete.slug),
-        })
-      }
+      dispatch({ type: 'remove', slug: confirmDelete.slug })
+      setCounts((prev) => {
+        const next = { ...prev }
+        delete next[confirmDelete.slug]
+        return next
+      })
       setConfirmDelete(null)
     } catch {
       setActionError('Couldn’t delete — try again.')
