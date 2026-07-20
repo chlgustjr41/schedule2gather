@@ -56,13 +56,28 @@ function timeInputValueToMinutes(value: string): number | null {
   return h * 60 + m
 }
 
-/** Earliest/Latest wheel options at `step`-minute increments across the day. */
-function buildMinuteOptions(step: number, kind: 'start' | 'end'): { value: number; label: string }[] {
-  const from = kind === 'start' ? 0 : step
-  const to = kind === 'start' ? 1440 - step : 1440
+/** Hour-only label, 12-hour clock; `h` may be 24 (end-of-day wrap → "12 AM"). */
+function formatHourOnly(h: number): string {
+  const norm = h % 24
+  const suffix = norm < 12 ? 'AM' : 'PM'
+  const display = norm % 12 === 0 ? 12 : norm % 12
+  return `${display} ${suffix}`
+}
+
+// Mobile's 4 wheels are hour + minute, kept separate so the minute wheel is
+// always a short, fast scroll regardless of how wide the day's hour range is.
+// Start hours are 0..23 ("12 AM".."11 PM"); end hours are 1..24, where 24 is
+// the end-of-day wrap and also reads "12 AM" — mirrors how `startMinutes`/
+// `endMinutes` (0..1440) already decompose via Math.floor(total / 60).
+const START_HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({ value: h, label: formatHourOnly(h) }))
+const END_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({ value: i + 1, label: formatHourOnly(i + 1) }))
+
+/** Minute-of-hour options at `step` increments (e.g. step=15 → :00/:15/:30/:45). */
+function buildMinuteOnlyOptions(step: number): { value: number; label: string }[] {
+  const clampedStep = Math.min(step, 60)
   const opts = []
-  for (let m = from; m <= to; m += step) {
-    opts.push({ value: m, label: formatMinutesLabel(m) })
+  for (let m = 0; m < 60; m += clampedStep) {
+    opts.push({ value: m, label: `:${String(m).padStart(2, '0')}` })
   }
   return opts
 }
@@ -109,9 +124,13 @@ export default function CreateEventForm() {
     return [detectedTz, ...tzs]
   }, [detectedTz])
 
-  // Mobile wheel options, regenerated whenever the slot-length step changes.
-  const startTimeOptions = useMemo(() => buildMinuteOptions(slotMinutes, 'start'), [slotMinutes])
-  const endTimeOptions = useMemo(() => buildMinuteOptions(slotMinutes, 'end'), [slotMinutes])
+  // Mobile's minute wheels, regenerated whenever the slot-length step changes
+  // (hour wheels are fixed 24-entry constants, defined at module scope above).
+  const minuteOnlyOptions = useMemo(() => buildMinuteOnlyOptions(slotMinutes), [slotMinutes])
+  const startHourValue = Math.floor(startMinutes / 60)
+  const startMinuteValue = startMinutes % 60
+  const endHourValue = Math.floor(endMinutes / 60)
+  const endMinuteValue = endMinutes % 60
 
   const changeMinutes = (changed: 'start' | 'end', value: number) => {
     const next = clampTimeRange(
@@ -536,25 +555,35 @@ export default function CreateEventForm() {
               <div className="px-4 pb-4 space-y-3">
                 {isMobile ? (
                   <div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Earliest</span>
-                        <WheelPicker
-                          ariaLabel="Earliest time"
-                          options={startTimeOptions}
-                          value={startMinutes}
-                          onChange={(v) => changeMinutes('start', v)}
-                        />
-                      </div>
-                      <div>
-                        <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Latest</span>
-                        <WheelPicker
-                          ariaLabel="Latest time"
-                          options={endTimeOptions}
-                          value={endMinutes}
-                          onChange={(v) => changeMinutes('end', v)}
-                        />
-                      </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="text-xs font-bold text-ink-muted text-center">Earliest</span>
+                      <span className="text-xs font-bold text-ink-muted text-center">Latest</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 mt-1">
+                      <WheelPicker
+                        ariaLabel="Earliest hour"
+                        options={START_HOUR_OPTIONS}
+                        value={startHourValue}
+                        onChange={(h) => changeMinutes('start', h * 60 + startMinuteValue)}
+                      />
+                      <WheelPicker
+                        ariaLabel="Earliest minute"
+                        options={minuteOnlyOptions}
+                        value={startMinuteValue}
+                        onChange={(m) => changeMinutes('start', startHourValue * 60 + m)}
+                      />
+                      <WheelPicker
+                        ariaLabel="Latest hour"
+                        options={END_HOUR_OPTIONS}
+                        value={endHourValue}
+                        onChange={(h) => changeMinutes('end', h * 60 + endMinuteValue)}
+                      />
+                      <WheelPicker
+                        ariaLabel="Latest minute"
+                        options={minuteOnlyOptions}
+                        value={endMinuteValue}
+                        onChange={(m) => changeMinutes('end', endHourValue * 60 + m)}
+                      />
                     </div>
                     {rangeHint && (
                       <p className="text-xs text-ink-muted mt-1 text-center">
