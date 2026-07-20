@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DayPicker, type DateRange, type WeekNumberProps } from 'react-day-picker'
+import { DayPicker, type DateRange, type MonthCaptionProps, type WeekNumberProps } from 'react-day-picker'
 import 'react-day-picker/style.css'
 import {
   addMonths,
@@ -68,6 +68,11 @@ export default function CreateEventForm() {
   // months are actually on screen as the user pages through the calendar.
   const [displayMonth, setDisplayMonth] = useState<Date>(today)
   const visibleMonths = isMobile ? [displayMonth] : [displayMonth, addMonths(displayMonth, 1)]
+  // DayPicker's built-in Nav is suppressed (components.Nav returns null below)
+  // in favor of these, rendered on the Pick-days/Date-range toggle's row.
+  const canGoPrevMonth = startOfMonth(displayMonth) > startOfMonth(today)
+  const goToPrevMonth = () => setDisplayMonth((m) => addMonths(m, -1))
+  const goToNextMonth = () => setDisplayMonth((m) => addMonths(m, 1))
 
   const tzOptions = useMemo(() => {
     const tzs = COMMON_TIMEZONES as readonly string[]
@@ -161,30 +166,38 @@ export default function CreateEventForm() {
     }
   }
 
-  const renderQuickRow = (anchor: Date) => (
-    <div key={anchor.getTime()} className="flex items-center gap-2 text-xs flex-wrap">
-      <span className="text-ink-muted w-16 shrink-0">{format(anchor, 'MMMM')}:</span>
-      {(['all', 'weekdays', 'weekends'] as const).map((cat) => (
-        <button
-          key={cat}
-          type="button"
-          onClick={() => selectInMonth(anchor, cat)}
-          className="text-primary font-bold hover:underline capitalize"
-        >
-          {cat}
-        </button>
-      ))}
-      {selectedDates.some((d) => isSameMonth(d, anchor)) && (
-        <button
-          type="button"
-          onClick={() => setSelectedDates((prev) => prev.filter((d) => !isSameMonth(d, anchor)))}
-          className="text-danger font-bold hover:underline"
-        >
-          Clear
-        </button>
-      )}
-    </div>
-  )
+  // Merged into the same row as each month's bold "Month YYYY" caption
+  // (react-day-picker v9's MonthCaption override), replacing the old
+  // separate grey quick-select row above the calendar.
+  const MonthCaption = ({ calendarMonth }: MonthCaptionProps) => {
+    const anchor = calendarMonth.date
+    return (
+      <div className="flex items-center justify-between gap-x-3 gap-y-1 flex-wrap mb-2 px-1">
+        <span className="text-base font-extrabold">{format(anchor, 'MMMM yyyy')}</span>
+        <div className="flex items-center gap-2 text-xs flex-wrap">
+          {(['all', 'weekdays', 'weekends'] as const).map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => selectInMonth(anchor, cat)}
+              className="text-primary font-bold hover:underline capitalize"
+            >
+              {cat}
+            </button>
+          ))}
+          {selectedDates.some((d) => isSameMonth(d, anchor)) && (
+            <button
+              type="button"
+              onClick={() => setSelectedDates((prev) => prev.filter((d) => !isSameMonth(d, anchor)))}
+              className="text-danger font-bold hover:underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // Clickable Mon–Sun titles inside the calendar itself. v9 passes no date
   // context to `components.Weekday`, so the column (position among header
@@ -303,25 +316,40 @@ export default function CreateEventForm() {
       </div>
 
       <Card>
-        <SegmentedControl
-          className="max-w-[260px] mb-3"
-          options={[
-            { value: 'days', label: 'Pick days' },
-            { value: 'range', label: 'Date range' },
-          ]}
-          value={pickMode}
-          onChange={(v) => {
-            setPickMode(v)
-            setRangeDraft(undefined)
-          }}
-        />
-        {/* One quick-select row per VISIBLE month, aligned above its month column. */}
-        <div className={`mb-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
-          {visibleMonths.map((m) => (
-            <div key={m.getTime()} className="flex justify-center">
-              {renderQuickRow(m)}
-            </div>
-          ))}
+        <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+          <SegmentedControl
+            className="max-w-[260px]"
+            options={[
+              { value: 'days', label: 'Pick days' },
+              { value: 'range', label: 'Date range' },
+            ]}
+            value={pickMode}
+            onChange={(v) => {
+              setPickMode(v)
+              setRangeDraft(undefined)
+            }}
+          />
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={goToPrevMonth}
+              disabled={!canGoPrevMonth}
+              aria-label="Previous month"
+              title="Previous month"
+              className="w-8 h-8 rounded-full border border-line bg-surface text-ink-muted hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={goToNextMonth}
+              aria-label="Next month"
+              title="Next month"
+              className="w-8 h-8 rounded-full border border-line bg-surface text-ink-muted hover:text-ink flex items-center justify-center"
+            >
+              ›
+            </button>
+          </div>
         </div>
         <div className="rdp-side-by-side">
           {pickMode === 'days' ? (
@@ -335,7 +363,7 @@ export default function CreateEventForm() {
               disabled={{ before: today }}
               startMonth={today}
               showWeekNumber
-              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader }}
+              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader, MonthCaption, Nav: () => <></> }}
             />
           ) : (
             <DayPicker
@@ -364,7 +392,7 @@ export default function CreateEventForm() {
               disabled={{ before: today }}
               startMonth={today}
               showWeekNumber
-              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader }}
+              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader, MonthCaption, Nav: () => <></> }}
             />
           )}
         </div>
