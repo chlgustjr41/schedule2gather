@@ -72,12 +72,12 @@ function formatHourOnly(h: number): string {
 const START_HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({ value: h, label: formatHourOnly(h) }))
 const END_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({ value: i + 1, label: formatHourOnly(i + 1) }))
 
-/** Minute-of-hour options at `step` increments (e.g. step=15 → :00/:15/:30/:45). */
+/** Minute-of-hour options at `step` increments (e.g. step=15 → 00/15/30/45). */
 function buildMinuteOnlyOptions(step: number): { value: number; label: string }[] {
   const clampedStep = Math.min(step, 60)
   const opts = []
   for (let m = 0; m < 60; m += clampedStep) {
-    opts.push({ value: m, label: `:${String(m).padStart(2, '0')}` })
+    opts.push({ value: m, label: String(m).padStart(2, '0') })
   }
   return opts
 }
@@ -97,7 +97,7 @@ export default function CreateEventForm() {
   const [optionalOpen, setOptionalOpen] = useState(false)
   const [startMinutes, setStartMinutes] = useState(9 * 60)
   const [endMinutes, setEndMinutes] = useState(21 * 60)
-  const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(30)
+  const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(15)
   const detectedTz = useMemo(() => detectTimezone(), [])
   const [timezone, setTimezone] = useState(detectedTz)
   const [selectedDates, setSelectedDates] = useState<Date[]>([])
