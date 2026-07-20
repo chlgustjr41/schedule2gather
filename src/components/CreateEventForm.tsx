@@ -167,28 +167,32 @@ export default function CreateEventForm() {
     </div>
   )
 
-  // react-day-picker v9's `components.Weekday` only receives generic <th> attrs
-  // (aria-label/className/style/scope) — no weekday index or month context is
-  // exposed (verified in node_modules/react-day-picker/dist/esm/DayPicker.js,
-  // where Weekday is invoked with only { "aria-label", className, key, style,
-  // scope } and formatted text as children). So instead of overriding Weekday,
-  // render a chip row of 7 weekday toggle buttons above each month.
-  const weekdayChips = (month: Date) => (
-    <div key={`chips-${month.getTime()}`} className="grid grid-cols-7 gap-[2px] max-w-[252px] mx-auto mb-1">
-      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, i) => (
-        <button
-          key={i}
-          type="button"
-          onClick={() => toggleWeekday(month, i)}
-          className="text-[10px] font-extrabold text-ink-muted bg-raised border border-line rounded-[6px] py-0.5 active:bg-primary/20"
-          aria-label={`Toggle all ${
-            ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'][i]
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+  // Clickable Mon–Sun titles inside the calendar itself. v9 passes no date
+  // context to `components.Weekday`, so the column (position among header
+  // cells, offset by the week-number column) and the month (position among
+  // rendered .rdp-month blocks) are derived from the DOM at click time.
+  const WeekdayHeader = (props: React.ThHTMLAttributes<HTMLTableCellElement>) => (
+    <th {...props}>
+      <button
+        type="button"
+        title="Select every one of this weekday in the month"
+        aria-label={`Toggle this weekday for the whole month`}
+        className="w-full min-w-[34px] text-[11px] font-extrabold text-ink-muted bg-raised border border-line rounded-[6px] py-1 hover:bg-primary/15 active:bg-primary/25"
+        onClick={(e) => {
+          const th = e.currentTarget.closest('th')
+          const row = th?.parentElement
+          const monthEl = th?.closest('.rdp-month')
+          if (!th || !row || !monthEl) return
+          const monthIdx = [...document.querySelectorAll('.rdp-month')].indexOf(monthEl)
+          const cells = [...row.children]
+          const col = cells.indexOf(th) - (cells.length - 7)
+          const month = visibleMonths[monthIdx]
+          if (month && col >= 0) toggleWeekday(month, col)
+        }}
+      >
+        {props.children}
+      </button>
+    </th>
   )
 
   // v9's `onWeekNumberClick` prop is declared in the types (deprecated, typed
@@ -242,9 +246,8 @@ export default function CreateEventForm() {
         {/* One quick-select row per VISIBLE month, aligned above its month column. */}
         <div className={`mb-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
           {visibleMonths.map((m) => (
-            <div key={m.getTime()} className="flex flex-col items-center">
+            <div key={m.getTime()} className="flex justify-center">
               {renderQuickRow(m)}
-              {weekdayChips(m)}
             </div>
           ))}
         </div>
@@ -260,7 +263,7 @@ export default function CreateEventForm() {
               disabled={{ before: today }}
               startMonth={today}
               showWeekNumber
-              components={{ WeekNumber: WeekNumberCell }}
+              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader }}
             />
           ) : (
             <DayPicker
@@ -287,7 +290,7 @@ export default function CreateEventForm() {
               disabled={{ before: today }}
               startMonth={today}
               showWeekNumber
-              components={{ WeekNumber: WeekNumberCell }}
+              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader }}
             />
           )}
         </div>

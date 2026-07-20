@@ -78,7 +78,7 @@ export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
                       e.stopPropagation()
                       setTip((cur) => (cur === slotIdx ? null : slotIdx))
                     }}
-                    className="relative flex-1 min-w-[4px] h-[18px] rounded-[2px] border-0 p-0 cursor-pointer"
+                    className="relative flex-1 min-w-[4px] h-[18px] rounded-[2px] border border-line/60 p-0 cursor-pointer"
                     style={{ backgroundColor: heatColor(counts[slotIdx] ?? 0, total) }}
                   >
                     {tip === slotIdx && (

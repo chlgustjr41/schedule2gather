@@ -140,7 +140,6 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   const interactive = !readOnly
   const showPaintToggle = isMobile
   const stickyTimeColumn = paged && viewMode === 'month'
-  const scrollableMonth = paged && viewMode === 'month'
 
   const myCommittedBits = useMemo(() => {
     if (!event || !myParticipant) return null
@@ -404,7 +403,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       aria-label={`My availability for ${event.name}`}
       aria-rowcount={spd + 1}
       aria-colcount={event.dates.length + 1}
-      className={`border-collapse select-none ${scrollableMonth ? '' : 'mx-auto'}`}
+      className="border-collapse select-none mx-auto"
       onPointerMove={interactive ? handlePointerMove : undefined}
       onPointerUp={interactive ? handlePointerUp : undefined}
       onPointerCancel={interactive ? handlePointerUp : undefined}
