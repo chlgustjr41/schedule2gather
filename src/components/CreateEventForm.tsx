@@ -8,6 +8,7 @@ import {
   endOfMonth,
   format,
   getDay,
+  isSameMonth,
   startOfDay,
   startOfMonth,
 } from 'date-fns'
@@ -56,6 +57,7 @@ export default function CreateEventForm() {
   const [rangeHint, setRangeHint] = useState(false)
   const [pickMode, setPickMode] = useState<'days' | 'range'>('days')
   const [rangeDraft, setRangeDraft] = useState<DateRange | undefined>(undefined)
+  const [datesOnly, setDatesOnly] = useState(false)
 
   const today = useMemo(() => startOfDay(new Date()), [])
   // Controlled calendar month so the per-month quick-select rows track whatever
@@ -129,7 +131,7 @@ export default function CreateEventForm() {
       if (selectedDates.length === 0) {
         throw new Error('Pick at least one date')
       }
-      if (startHour >= endHour) {
+      if (!datesOnly && startHour >= endHour) {
         throw new Error('Latest must be after earliest')
       }
       const dates = [...selectedDates]
@@ -139,9 +141,10 @@ export default function CreateEventForm() {
         name,
         mode: 'specific_dates',
         dates,
-        timeRange: { start: startHour, end: endHour },
-        slotMinutes,
+        timeRange: datesOnly ? { start: 0, end: 24 } : { start: startHour, end: endHour },
+        slotMinutes: datesOnly ? 60 : slotMinutes,
         timezone,
+        datesOnly,
       })
       navigate(`/e/${slug}`)
     } catch (err: unknown) {
@@ -165,13 +168,10 @@ export default function CreateEventForm() {
           {cat}
         </button>
       ))}
-      {selectedDates.length > 0 && (
+      {selectedDates.some((d) => isSameMonth(d, anchor)) && (
         <button
           type="button"
-          onClick={() => {
-            setSelectedDates([])
-            setRangeDraft(undefined)
-          }}
+          onClick={() => setSelectedDates((prev) => prev.filter((d) => !isSameMonth(d, anchor)))}
           className="text-danger font-bold hover:underline"
         >
           Clear
@@ -228,9 +228,11 @@ export default function CreateEventForm() {
     </th>
   )
 
-  const summaryLabel = `${formatHour(startHour)} – ${formatHour(endHour)} · ${slotMinutes} min · ${
-    timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone
-  }`
+  const summaryLabel = datesOnly
+    ? `Dates only · ${timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone}`
+    : `${formatHour(startHour)} – ${formatHour(endHour)} · ${slotMinutes} min · ${
+        timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone
+      }`
 
   const hourSelectClass =
     'w-full bg-raised border-[1.5px] border-line rounded-[12px] px-3 py-2 text-sm text-ink'
@@ -261,6 +263,18 @@ export default function CreateEventForm() {
             setRangeDraft(undefined)
           }}
         />
+        <div className="mt-2 mb-3">
+          <span className="block text-xs font-bold text-ink-muted mb-1">Ask voters for</span>
+          <SegmentedControl
+            className="max-w-[280px]"
+            options={[
+              { value: 'times', label: '⏰ Specific times', title: 'Voters paint the hours they’re free' },
+              { value: 'dates', label: '📅 Dates only', title: 'Voters just mark which days they’re free — no hourly grid' },
+            ]}
+            value={datesOnly ? 'dates' : 'times'}
+            onChange={(v) => setDatesOnly(v === 'dates')}
+          />
+        </div>
         {/* One quick-select row per VISIBLE month, aligned above its month column. */}
         <div className={`mb-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
           {visibleMonths.map((m) => (
@@ -370,77 +384,81 @@ export default function CreateEventForm() {
         </button>
         {advancedOpen && (
           <div className="px-4 pb-4 space-y-3">
-            {isMobile ? (
-              <div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Earliest</span>
-                    <WheelPicker
-                      ariaLabel="Earliest hour"
-                      options={HOURS_START}
-                      value={startHour}
-                      onChange={(v) => changeHours('start', v)}
-                    />
+            {!datesOnly && (
+              isMobile ? (
+                <div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Earliest</span>
+                      <WheelPicker
+                        ariaLabel="Earliest hour"
+                        options={HOURS_START}
+                        value={startHour}
+                        onChange={(v) => changeHours('start', v)}
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Latest</span>
+                      <WheelPicker
+                        ariaLabel="Latest hour"
+                        options={HOURS_END}
+                        value={endHour}
+                        onChange={(v) => changeHours('end', v)}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Latest</span>
-                    <WheelPicker
-                      ariaLabel="Latest hour"
-                      options={HOURS_END}
-                      value={endHour}
-                      onChange={(v) => changeHours('end', v)}
-                    />
-                  </div>
+                  {rangeHint && (
+                    <p className="text-xs text-ink-muted mt-1 text-center">
+                      Adjusted — the window must be at least 1 hour.
+                    </p>
+                  )}
                 </div>
-                {rangeHint && (
-                  <p className="text-xs text-ink-muted mt-1 text-center">
-                    Adjusted — the window must be at least 1 hour.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="start-hour" className="block text-xs font-bold text-ink-muted mb-1">Earliest</label>
-                    <ScrollSelect
-                      id="start-hour"
-                      ariaLabel="Earliest hour"
-                      options={HOURS_START}
-                      value={startHour}
-                      onChange={(v) => changeHours('start', v)}
-                    />
+              ) : (
+                <div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="start-hour" className="block text-xs font-bold text-ink-muted mb-1">Earliest</label>
+                      <ScrollSelect
+                        id="start-hour"
+                        ariaLabel="Earliest hour"
+                        options={HOURS_START}
+                        value={startHour}
+                        onChange={(v) => changeHours('start', v)}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="end-hour" className="block text-xs font-bold text-ink-muted mb-1">Latest</label>
+                      <ScrollSelect
+                        id="end-hour"
+                        ariaLabel="Latest hour"
+                        options={HOURS_END}
+                        value={endHour}
+                        onChange={(v) => changeHours('end', v)}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label htmlFor="end-hour" className="block text-xs font-bold text-ink-muted mb-1">Latest</label>
-                    <ScrollSelect
-                      id="end-hour"
-                      ariaLabel="Latest hour"
-                      options={HOURS_END}
-                      value={endHour}
-                      onChange={(v) => changeHours('end', v)}
-                    />
-                  </div>
+                  {rangeHint && (
+                    <p className="text-xs text-ink-muted mt-1">
+                      Adjusted — the window must be at least 1 hour.
+                    </p>
+                  )}
                 </div>
-                {rangeHint && (
-                  <p className="text-xs text-ink-muted mt-1">
-                    Adjusted — the window must be at least 1 hour.
-                  </p>
-                )}
+              )
+            )}
+            {!datesOnly && (
+              <div>
+                <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
+                <SegmentedControl
+                  options={[
+                    { value: '15', label: '15 min' },
+                    { value: '30', label: '30 min' },
+                    { value: '60', label: '1 hour' },
+                  ]}
+                  value={String(slotMinutes) as '15' | '30' | '60'}
+                  onChange={(v) => setSlotMinutes(Number(v) as 15 | 30 | 60)}
+                />
               </div>
             )}
-            <div>
-              <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
-              <SegmentedControl
-                options={[
-                  { value: '15', label: '15 min' },
-                  { value: '30', label: '30 min' },
-                  { value: '60', label: '1 hour' },
-                ]}
-                value={String(slotMinutes) as '15' | '30' | '60'}
-                onChange={(v) => setSlotMinutes(Number(v) as 15 | 30 | 60)}
-              />
-            </div>
             <div>
               <label htmlFor="event-tz" className="block text-xs font-bold text-ink-muted mb-1">Time zone</label>
               <div className="flex gap-2">
