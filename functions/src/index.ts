@@ -59,6 +59,7 @@ export const createEvent = onCall(
       slotMinutes: input.slotMinutes,
       timezone: input.timezone,
       slotCount,
+      datesOnly: input.datesOnly ?? false,
     })
 
     return { slug }
