@@ -94,28 +94,28 @@ describe('timezoneSlots', () => {
   })
 
   describe('formatSlotTimeLabel', () => {
-    it('same-TZ (NY event 9 AM, NY viewer): "09:00"', () => {
-      expect(formatSlotTimeLabel(nyEvent, 0, 'America/New_York')).toBe('09:00')
+    it('same-TZ (NY event 9 AM, NY viewer): "9:00 AM"', () => {
+      expect(formatSlotTimeLabel(nyEvent, 0, 'America/New_York')).toBe('9:00 AM')
     })
 
-    it('NY event slot 1 in NY viewer: "09:30"', () => {
-      expect(formatSlotTimeLabel(nyEvent, 1, 'America/New_York')).toBe('09:30')
+    it('NY event slot 1 in NY viewer: "9:30 AM"', () => {
+      expect(formatSlotTimeLabel(nyEvent, 1, 'America/New_York')).toBe('9:30 AM')
     })
 
-    it('fractional-hour start (9:15) formats slot 0 as "09:15"', () => {
+    it('fractional-hour start (9:15) formats slot 0 as "9:15 AM"', () => {
       const quarterHourEvent: EventForLabels = { ...nyEvent, timeRange: { start: 9.25, end: 17.5 } }
-      expect(formatSlotTimeLabel(quarterHourEvent, 0, 'America/New_York')).toBe('09:15')
-      expect(formatSlotTimeLabel(quarterHourEvent, 1, 'America/New_York')).toBe('09:45')
+      expect(formatSlotTimeLabel(quarterHourEvent, 0, 'America/New_York')).toBe('9:15 AM')
+      expect(formatSlotTimeLabel(quarterHourEvent, 1, 'America/New_York')).toBe('9:45 AM')
     })
 
-    it('cross-TZ (NY 9 AM EDT, LA viewer PDT): "06:00"', () => {
+    it('cross-TZ (NY 9 AM EDT, LA viewer PDT): "6:00 AM"', () => {
       // 9:00 EDT = 13:00 UTC = 06:00 PDT
-      expect(formatSlotTimeLabel(nyEvent, 0, 'America/Los_Angeles')).toBe('06:00')
+      expect(formatSlotTimeLabel(nyEvent, 0, 'America/Los_Angeles')).toBe('6:00 AM')
     })
 
-    it('cross-TZ (NY 9 AM EDT, Tokyo viewer JST): "22:00"', () => {
+    it('cross-TZ (NY 9 AM EDT, Tokyo viewer JST): "10:00 PM"', () => {
       // 9:00 EDT = 13:00 UTC = 22:00 JST
-      expect(formatSlotTimeLabel(nyEvent, 0, 'Asia/Tokyo')).toBe('22:00')
+      expect(formatSlotTimeLabel(nyEvent, 0, 'Asia/Tokyo')).toBe('10:00 PM')
     })
 
     it('weekdays_recurring uses event-TZ formatting', () => {
@@ -127,8 +127,19 @@ describe('timezoneSlots', () => {
         timezone: 'America/New_York',
       }
       // Even with viewer TZ Tokyo, weekdays_recurring shows event-local times
-      expect(formatSlotTimeLabel(recurring, 0, 'Asia/Tokyo')).toBe('09:00')
-      expect(formatSlotTimeLabel(recurring, 1, 'Asia/Tokyo')).toBe('09:30')
+      expect(formatSlotTimeLabel(recurring, 0, 'Asia/Tokyo')).toBe('9:00 AM')
+      expect(formatSlotTimeLabel(recurring, 1, 'Asia/Tokyo')).toBe('9:30 AM')
+    })
+
+    it('afternoon hour formats correctly (e.g. 14:00 -> "2:00 PM")', () => {
+      const afternoonEvent: EventForLabels = {
+        mode: 'weekdays_recurring',
+        dates: ['mon'],
+        timeRange: { start: 14, end: 15 },
+        slotMinutes: 30,
+        timezone: 'America/New_York',
+      }
+      expect(formatSlotTimeLabel(afternoonEvent, 0, 'America/New_York')).toBe('2:00 PM')
     })
   })
 
