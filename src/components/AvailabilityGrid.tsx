@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { format } from 'date-fns'
+import { format, startOfMonth, startOfWeek } from 'date-fns'
 import { useEventStore } from '@/stores/eventStore'
 import { usePaintStore } from '@/stores/paintStore'
 import { pack, unpack } from '@/lib/bitmap'
@@ -67,6 +67,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     }
   })
   const [eventDaysOnly, setEventDaysOnly] = useState(true)
+  const [dateOnlyView, setDateOnlyView] = useState<'all' | 'week' | 'month'>(() => (isMobile ? 'week' : 'all'))
 
   const changeZoom = (dir: 1 | -1) =>
     setZoom((z) => {
@@ -108,6 +109,32 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     () => (event ? getMonthPages(event.dates) : []),
     [event],
   )
+
+  // Dates-only voting groups every event date by its calendar week/month so
+  // "Weekly"/"Monthly" can render all of them at once as labeled sections —
+  // unlike the timed grid's paged Week/Month, nothing is hidden behind Prev/Next.
+  const dateOnlyWeekGroups = useMemo(() => {
+    if (!event) return []
+    const groups = new Map<number, { start: Date; dateIdxs: number[] }>()
+    event.dates.forEach((dateStr, idx) => {
+      const start = startOfWeek(new Date(dateStr + 'T00:00:00'))
+      const existing = groups.get(start.getTime())
+      if (existing) existing.dateIdxs.push(idx)
+      else groups.set(start.getTime(), { start, dateIdxs: [idx] })
+    })
+    return [...groups.values()].sort((a, b) => a.start.getTime() - b.start.getTime())
+  }, [event])
+  const dateOnlyMonthGroups = useMemo(() => {
+    if (!event) return []
+    const groups = new Map<number, { start: Date; dateIdxs: number[] }>()
+    event.dates.forEach((dateStr, idx) => {
+      const start = startOfMonth(new Date(dateStr + 'T00:00:00'))
+      const existing = groups.get(start.getTime())
+      if (existing) existing.dateIdxs.push(idx)
+      else groups.set(start.getTime(), { start, dateIdxs: [idx] })
+    })
+    return [...groups.values()].sort((a, b) => a.start.getTime() - b.start.getTime())
+  }, [event])
   const paged = viewSize !== 'all'
   const viewMode: 'week' | 'month' = viewSize === 'month' ? 'month' : 'week'
   const rawPages = useMemo(
@@ -523,11 +550,44 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   )
 
   if (event.datesOnly) {
+    const renderDateChip = (dateIdx: number) => {
+      const dateStr = event.dates[dateIdx]
+      const startIdx = dateIdx * spd
+      const mine = myDisplayBits.slice(startIdx, startIdx + spd).every(Boolean)
+      return (
+        <button
+          key={dateStr}
+          type="button"
+          disabled={!interactive}
+          onClick={interactive ? () => void toggleColumn(dateIdx) : undefined}
+          title={interactive ? (mine ? 'Tap to mark unavailable' : 'Tap to mark available') : undefined}
+          aria-pressed={mine}
+          className={`px-4 py-3 rounded-[12px] border text-sm font-bold transition select-none ${
+            interactive ? 'cursor-pointer' : 'cursor-default'
+          } ${mine ? 'border-transparent' : 'bg-surface border-line text-ink hover:bg-raised'}`}
+          style={mine ? { backgroundColor: 'var(--s2g-mine)', color: 'var(--s2g-on-primary)' } : undefined}
+        >
+          {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
+        </button>
+      )
+    }
+
+    const groups = dateOnlyView === 'week' ? dateOnlyWeekGroups : dateOnlyMonthGroups
+
     return (
       <div className="pt-2">
         {interactive && (
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <div className="flex items-center gap-1 sm:gap-2">
+              <SegmentedControl<'all' | 'week' | 'month'>
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'week', label: 'Weekly' },
+                  { value: 'month', label: 'Monthly' },
+                ]}
+                value={dateOnlyView}
+                onChange={setDateOnlyView}
+              />
               <Button
                 variant="secondary"
                 size="sm"
@@ -571,28 +631,24 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
             </div>
           </div>
         )}
-        <div className="flex flex-wrap gap-2 justify-center">
-          {event.dates.map((dateStr, dateIdx) => {
-            const startIdx = dateIdx * spd
-            const mine = myDisplayBits.slice(startIdx, startIdx + spd).every(Boolean)
-            return (
-              <button
-                key={dateStr}
-                type="button"
-                disabled={!interactive}
-                onClick={interactive ? () => void toggleColumn(dateIdx) : undefined}
-                title={interactive ? (mine ? 'Tap to mark unavailable' : 'Tap to mark available') : undefined}
-                aria-pressed={mine}
-                className={`px-4 py-3 rounded-[12px] border text-sm font-bold transition select-none ${
-                  interactive ? 'cursor-pointer' : 'cursor-default'
-                } ${mine ? 'border-transparent' : 'bg-surface border-line text-ink hover:bg-raised'}`}
-                style={mine ? { backgroundColor: 'var(--s2g-mine)', color: 'var(--s2g-on-primary)' } : undefined}
-              >
-                {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
-              </button>
-            )
-          })}
-        </div>
+        {dateOnlyView === 'all' ? (
+          <div className="flex flex-wrap gap-2 justify-center">
+            {event.dates.map((_, dateIdx) => renderDateChip(dateIdx))}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {groups.map((g) => (
+              <div key={g.start.getTime()}>
+                <div className="text-xs font-extrabold uppercase tracking-widest text-ink-muted mb-2 text-center">
+                  {dateOnlyView === 'week' ? `Week of ${format(g.start, 'MMM d')}` : format(g.start, 'MMMM yyyy')}
+                </div>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {g.dateIdxs.map((dateIdx) => renderDateChip(dateIdx))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     )
   }
