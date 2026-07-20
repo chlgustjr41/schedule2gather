@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'motion/react'
 import { DayPicker, type DateRange, type MonthCaptionProps, type WeekNumberProps } from 'react-day-picker'
 import 'react-day-picker/style.css'
 import {
@@ -172,7 +173,7 @@ export default function CreateEventForm() {
   const MonthCaption = ({ calendarMonth }: MonthCaptionProps) => {
     const anchor = calendarMonth.date
     return (
-      <div className="flex items-center justify-between gap-x-3 gap-y-1 flex-wrap mb-2 px-1">
+      <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mb-2 px-1">
         <span className="text-base font-extrabold">{format(anchor, 'MMMM yyyy')}</span>
         <div className="flex items-center gap-2 text-xs flex-wrap">
           {(['all', 'weekdays', 'weekends'] as const).map((cat) => (
@@ -284,50 +285,62 @@ export default function CreateEventForm() {
           </span>
           <span aria-hidden="true">{optionalOpen ? '▴' : '▾'}</span>
         </button>
-        {optionalOpen && (
-          <div className="px-4 pb-4 space-y-3">
-            <TextField
-              id="event-location"
-              label="📍 Location (optional)"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Where's it happening? (optional)"
-              maxLength={200}
-            />
-            <div>
-              <label
-                htmlFor="event-description"
-                className="block text-[10px] font-extrabold uppercase tracking-widest text-ink-muted mb-1.5"
-              >
-                📝 Description (optional)
-              </label>
-              <textarea
-                id="event-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Any extra details voters should know…"
-                maxLength={1000}
-                rows={3}
-                className="w-full bg-raised border-[1.5px] border-line rounded-[12px] px-4 py-3 text-ink placeholder:text-ink-muted focus:outline-2 focus:outline-primary resize-none"
-              />
-            </div>
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {optionalOpen && (
+            <motion.div
+              key="optional-fields"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: 'easeInOut' }}
+              className="overflow-hidden"
+            >
+              <div className="px-4 pb-4 space-y-3">
+                <TextField
+                  id="event-location"
+                  label="📍 Location (optional)"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Where's it happening? (optional)"
+                  maxLength={200}
+                />
+                <div>
+                  <label
+                    htmlFor="event-description"
+                    className="block text-[10px] font-extrabold uppercase tracking-widest text-ink-muted mb-1.5"
+                  >
+                    📝 Description (optional)
+                  </label>
+                  <textarea
+                    id="event-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Any extra details voters should know…"
+                    maxLength={1000}
+                    rows={3}
+                    className="w-full bg-raised border-[1.5px] border-line rounded-[12px] px-4 py-3 text-ink placeholder:text-ink-muted focus:outline-2 focus:outline-primary resize-none"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <Card>
         <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-          <SegmentedControl
-            className="max-w-[260px]"
-            options={[
-              { value: 'days', label: 'Pick days' },
-              { value: 'range', label: 'Date range' },
-            ]}
-            value={pickMode}
+          <Switch
+            checked={pickMode === 'range'}
             onChange={(v) => {
-              setPickMode(v)
+              setPickMode(v ? 'range' : 'days')
               setRangeDraft(undefined)
             }}
+            label="Date range mode"
+            title={
+              pickMode === 'range'
+                ? 'Pick a start and end date — reverts to single-day picking once the range is complete'
+                : 'Turn on to select a whole date range in one go, instead of picking days one at a time'
+            }
           />
           <div className="flex items-center gap-1">
             <button
