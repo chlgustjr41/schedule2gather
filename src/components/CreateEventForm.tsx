@@ -49,6 +49,8 @@ export default function CreateEventForm() {
 
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
+  const [description, setDescription] = useState('')
+  const [optionalOpen, setOptionalOpen] = useState(false)
   const [startHour, setStartHour] = useState(9)
   const [endHour, setEndHour] = useState(21)
   const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(30)
@@ -148,6 +150,7 @@ export default function CreateEventForm() {
         timezone,
         datesOnly,
         location: location.trim() || undefined,
+        description: description.trim() || undefined,
       })
       navigate(`/e/${slug}`)
     } catch (err: unknown) {
@@ -253,14 +256,51 @@ export default function CreateEventForm() {
         placeholder="Pizza night, team sync, book club…"
       />
 
-      <TextField
-        id="event-location"
-        label="📍 Location (optional)"
-        value={location}
-        onChange={(e) => setLocation(e.target.value)}
-        placeholder="Where's it happening? (optional)"
-        maxLength={200}
-      />
+      <div className="bg-line/40 rounded-[12px]">
+        <button
+          type="button"
+          onClick={() => setOptionalOpen((v) => !v)}
+          aria-expanded={optionalOpen}
+          className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-bold text-ink-muted"
+        >
+          <span>
+            📍📝 Location &amp; description (optional)
+            {(location.trim() || description.trim()) && (
+              <span className="text-primary ml-1.5" aria-hidden="true">●</span>
+            )}
+          </span>
+          <span aria-hidden="true">{optionalOpen ? '▴' : '▾'}</span>
+        </button>
+        {optionalOpen && (
+          <div className="px-4 pb-4 space-y-3">
+            <TextField
+              id="event-location"
+              label="📍 Location (optional)"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Where's it happening? (optional)"
+              maxLength={200}
+            />
+            <div>
+              <label
+                htmlFor="event-description"
+                className="block text-[10px] font-extrabold uppercase tracking-widest text-ink-muted mb-1.5"
+              >
+                📝 Description (optional)
+              </label>
+              <textarea
+                id="event-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Any extra details voters should know…"
+                maxLength={1000}
+                rows={3}
+                className="w-full bg-raised border-[1.5px] border-line rounded-[12px] px-4 py-3 text-ink placeholder:text-ink-muted focus:outline-2 focus:outline-primary resize-none"
+              />
+            </div>
+          </div>
+        )}
+      </div>
 
       <Card>
         <SegmentedControl

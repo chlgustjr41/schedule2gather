@@ -19,7 +19,9 @@ export const usePaintStore = create<PaintState>((set, get) => ({
   visited: new Set<number>(),
   draftBits: null,
   mode: null,
-  paintMode: false,
+  // On mobile this drives the "Paint Mode" toggle (desktop ignores it — painting
+  // is always on there). Defaulting to true skips a tap most mobile users expect anyway.
+  paintMode: true,
 
   startPaint: (slotIdx, currentBits) => {
     const startState = currentBits[slotIdx] ?? false

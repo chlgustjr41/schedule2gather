@@ -127,6 +127,11 @@ export default function EventPage() {
                 {event.location && (
                   <p className="text-sm text-ink-muted mt-0.5">📍 {event.location}</p>
                 )}
+                {event.description && (
+                  <p className="text-sm text-ink-muted mt-1 whitespace-pre-wrap break-words">
+                    {event.description}
+                  </p>
+                )}
                 {participants.length > 0 && (
                   <div className="flex items-center mt-2">
                     {participants.slice(0, 8).map((p) => (
