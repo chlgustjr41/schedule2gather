@@ -201,13 +201,18 @@ export default function CreateEventForm() {
   // receive `week: CalendarWeek` (with `.days: CalendarDay[]`, each carrying
   // `.date`) — confirmed in node_modules/react-day-picker/dist/esm/classes/CalendarWeek.d.ts
   // and the `showWeekNumber && <components.WeekNumber week={week} .../>` call site.
+  // ISO week numbers (27, 28, …) confused users — render a select-row glyph
+  // instead (explicit children override the spread's week-number children).
   const WeekNumberCell = ({ week, ...thProps }: WeekNumberProps) => (
     <th
       {...thProps}
       onClick={() => toggleWeek(week.days.map((d) => d.date))}
       role="button"
-      aria-label={`Toggle all days in week ${week.weekNumber}`}
-    />
+      title="Select this whole week"
+      aria-label="Select this whole week"
+    >
+      »
+    </th>
   )
 
   const summaryLabel = `${formatHour(startHour)} – ${formatHour(endHour)} · ${slotMinutes} min · ${
@@ -294,8 +299,23 @@ export default function CreateEventForm() {
             />
           )}
         </div>
+        {selectedDates.length > 0 && (
+          <div className="flex justify-center mt-1">
+            <Button
+              variant="danger"
+              size="sm"
+              type="button"
+              onClick={() => {
+                setSelectedDates([])
+                setRangeDraft(undefined)
+              }}
+            >
+              Unselect all
+            </Button>
+          </div>
+        )}
         {pickMode === 'range' && (
-          <p className="text-xs text-ink-muted">
+          <p className="text-xs text-ink-muted mt-1">
             Tap a start date, then an end date — the whole span is added to your selection.
           </p>
         )}
