@@ -44,7 +44,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   const [redoStack, setRedoStack] = useState<string[]>([])
   const [focusedSlot, setFocusedSlot] = useState<number>(0)
   const isMobile = useIsMobile()
-  const [pageSize, setPageSize] = useState<7 | 31>(7)
+  const [viewSize, setViewSize] = useState<'week' | 'month' | 'all'>(() => (isMobile ? 'week' : 'all'))
   const [pageIdx, setPageIdx] = useState(0)
   const [zoom, setZoom] = useState<Zoom>(() => {
     try {
@@ -75,6 +75,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     if (redoStack.length > 0) setRedoStack([])
   }
   const tableRef = useRef<HTMLTableElement>(null)
+  const scrollWrapRef = useRef<HTMLDivElement>(null)
 
   // Clamp focusedSlot when slotCount changes (e.g., switching events).
   if (event && focusedSlot >= event.slotCount) {
@@ -95,10 +96,11 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     () => (event ? getMonthPages(event.dates) : []),
     [event],
   )
-  const viewMode: 'week' | 'month' = pageSize === 7 ? 'week' : 'month'
+  const paged = viewSize !== 'all'
+  const viewMode: 'week' | 'month' = viewSize === 'month' ? 'month' : 'week'
   const rawPages = useMemo(
-    () => (isMobile ? (viewMode === 'week' ? weekPages : monthPages) : []),
-    [isMobile, viewMode, weekPages, monthPages],
+    () => (paged ? (viewMode === 'week' ? weekPages : monthPages) : []),
+    [paged, viewMode, weekPages, monthPages],
   )
   const pages = useMemo(() => {
     if (!event || !eventDaysOnly || rawPages.length === 0) return rawPages
@@ -115,7 +117,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   // On mobile, list the calendar columns for the current page (with greyed entries for out-of-range dates).
   const visibleColumns: CalendarColumn[] = useMemo(() => {
     if (!event) return []
-    if (!isMobile) {
+    if (!paged) {
       return event.dates.map((d, idx) => ({
         date: new Date(d + 'T00:00:00'),
         dateStr: d,
@@ -127,18 +129,18 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     if (!eventDaysOnly) return cols
     const filtered = cols.filter((c) => c.eventDateIdx !== -1)
     return filtered.length > 0 ? filtered : cols
-  }, [event, isMobile, currentPageStart, viewMode, eventDaysOnly])
+  }, [event, paged, currentPageStart, viewMode, eventDaysOnly])
 
-  // Clamp pageIdx when pageSize or pages change.
+  // Clamp pageIdx when the view or pages change.
   if (pageIdx >= totalPages) {
     setPageIdx(0)
   }
 
-  const effectivePaintMode = isMobile ? (viewMode === 'week' ? true : paintMode) : true
+  const effectivePaintMode = isMobile ? paintMode : true
   const interactive = !readOnly
-  const showPaintToggle = isMobile && viewMode === 'month'
-  const stickyTimeColumn = isMobile && viewMode === 'month'
-  const scrollableMonth = isMobile && viewMode === 'month'
+  const showPaintToggle = isMobile
+  const stickyTimeColumn = paged && viewMode === 'month'
+  const scrollableMonth = paged && viewMode === 'month'
 
   const myCommittedBits = useMemo(() => {
     if (!event || !myParticipant) return null
@@ -197,6 +199,21 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [undo, redo])
+
+  useEffect(() => {
+    const el = scrollWrapRef.current
+    if (!el || isMobile) return
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth) return
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
+      el.scrollLeft += e.deltaY
+      e.preventDefault()
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+    // `event` included so the listener re-attaches if the scroll container
+    // remounts after a loading state (ref targets aren't reactive deps).
+  }, [isMobile, event])
 
   if (!event || !myParticipant || !myCommittedBits) {
     return <div className="text-center text-ink-muted">Loading event…</div>
@@ -358,7 +375,9 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     if (nextIdx !== null) {
       e.preventDefault()
       const nextDateIdx = Math.floor(nextIdx / spd)
-      if (isMobile && event) {
+      // Any paged view (desktop included since v1.5) must advance the page when
+      // arrow-key navigation crosses a page boundary.
+      if (paged && event) {
         const targetEventDate = event.dates[nextDateIdx]
         if (targetEventDate) {
           // Find the page (week or month start) containing this date
@@ -496,16 +515,25 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     <div className="pt-2">
       {interactive && (
       <div className="flex justify-center gap-1 sm:gap-2 mb-3 flex-wrap">
-        {isMobile && (
-          <SegmentedControl
-            options={[
-              { value: '7', label: 'Week' },
-              { value: '31', label: 'Month' },
-            ]}
-            value={String(pageSize) as '7' | '31'}
-            onChange={(v) => { setPageSize(Number(v) as 7 | 31); setPageIdx(0) }}
-          />
-        )}
+        <SegmentedControl<'week' | 'month' | 'all'>
+          options={
+            isMobile
+              ? [
+                  { value: 'week', label: 'Week' },
+                  { value: 'month', label: 'Month' },
+                ]
+              : [
+                  { value: 'all', label: 'All' },
+                  { value: 'week', label: 'Week' },
+                  { value: 'month', label: 'Month' },
+                ]
+          }
+          value={viewSize}
+          onChange={(v) => {
+            setViewSize(v)
+            setPageIdx(0)
+          }}
+        />
         <Button
           variant="secondary"
           size="sm"
@@ -546,7 +574,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
         </div>
       </div>
       )}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" ref={scrollWrapRef}>
         {renderTable()}
       </div>
       <div className="flex justify-center gap-1 sm:gap-2 mt-3 flex-wrap">
@@ -556,7 +584,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
         <Button variant="secondary" size="sm" aria-label="Zoom in" disabled={zoom === 'lg'} onClick={() => changeZoom(1)}>
           +
         </Button>
-        {isMobile && (
+        {paged && (
           <Button
             variant={eventDaysOnly ? 'primary' : 'secondary'}
             size="sm"
@@ -585,7 +613,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           </Button>
         </div>
       )}
-      {interactive && isMobile && totalPages > 1 && (
+      {interactive && paged && totalPages > 1 && (
         <div className="flex justify-center items-center gap-3 mt-3 pb-2">
           <Button
             variant="secondary"

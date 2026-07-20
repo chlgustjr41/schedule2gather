@@ -93,6 +93,13 @@ body {
   --rdp-accent-background-color: color-mix(in srgb, var(--s2g-primary) 18%, transparent);
 }
 
+/* v1.5 — week-number cells toggle the whole week; read as clickable. */
+:root .rdp-root .rdp-week_number {
+  cursor: pointer;
+  color: var(--s2g-primary);
+  font-weight: 700;
+}
+
 /* v1.2 — comfortable touch targets for the date calendar on phones. */
 @media (max-width: 767px) {
   :root .rdp-root .rdp-day_button {
