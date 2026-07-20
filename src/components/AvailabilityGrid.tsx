@@ -412,7 +412,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       <thead>
         <tr role="row">
           <th
-            className={`w-20 ${stickyTimeColumn ? 'sticky left-0 bg-canvas z-10' : ''}`}
+            className={`w-20 ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
             aria-hidden="true"
           ></th>
           {visibleColumns.map((col) => {
@@ -453,7 +453,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               role="rowheader"
               scope="row"
               onClick={interactive ? () => void toggleRow(timeIdx) : undefined}
-              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-2 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-canvas z-10' : ''}`}
+              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-2 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
               title={interactive ? 'Click to toggle this entire row' : undefined}
             >
               {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
@@ -576,13 +576,15 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       <div className="overflow-x-auto" ref={scrollWrapRef}>
         {renderTable()}
       </div>
-      <div className="flex justify-center gap-1 sm:gap-2 mt-3 flex-wrap">
-        <Button variant="secondary" size="sm" aria-label="Zoom out" disabled={zoom === 'sm'} onClick={() => changeZoom(-1)}>
-          −
-        </Button>
-        <Button variant="secondary" size="sm" aria-label="Zoom in" disabled={zoom === 'lg'} onClick={() => changeZoom(1)}>
-          +
-        </Button>
+      <div className="flex items-center justify-between gap-2 mt-3 flex-wrap">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <Button variant="secondary" size="sm" aria-label="Zoom out" disabled={zoom === 'sm'} onClick={() => changeZoom(-1)}>
+            −
+          </Button>
+          <Button variant="secondary" size="sm" aria-label="Zoom in" disabled={zoom === 'lg'} onClick={() => changeZoom(1)}>
+            +
+          </Button>
+        </div>
         {paged && (
           <Button
             variant={eventDaysOnly ? 'primary' : 'secondary'}

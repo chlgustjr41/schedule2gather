@@ -19,6 +19,7 @@ import { clampTimeRange } from '@/lib/timeRange'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
+import ScrollSelect from '@/components/ui/ScrollSelect'
 import SegmentedControl from '@/components/ui/SegmentedControl'
 import TextField from '@/components/ui/TextField'
 import WheelPicker from '@/components/ui/WheelPicker'
@@ -152,7 +153,7 @@ export default function CreateEventForm() {
   }
 
   const renderQuickRow = (anchor: Date) => (
-    <div key={anchor.getTime()} className="flex items-center gap-2 text-xs">
+    <div key={anchor.getTime()} className="flex items-center gap-2 text-xs flex-wrap">
       <span className="text-ink-muted w-16 shrink-0">{format(anchor, 'MMMM')}:</span>
       {(['all', 'weekdays', 'weekends'] as const).map((cat) => (
         <button
@@ -164,6 +165,18 @@ export default function CreateEventForm() {
           {cat}
         </button>
       ))}
+      {selectedDates.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedDates([])
+            setRangeDraft(undefined)
+          }}
+          className="text-danger font-bold hover:underline"
+        >
+          Clear
+        </button>
+      )}
     </div>
   )
 
@@ -299,21 +312,6 @@ export default function CreateEventForm() {
             />
           )}
         </div>
-        {selectedDates.length > 0 && (
-          <div className="flex justify-center mt-1">
-            <Button
-              variant="danger"
-              size="sm"
-              type="button"
-              onClick={() => {
-                setSelectedDates([])
-                setRangeDraft(undefined)
-              }}
-            >
-              Unselect all
-            </Button>
-          </div>
-        )}
         {pickMode === 'range' && (
           <p className="text-xs text-ink-muted mt-1">
             Tap a start date, then an end date — the whole span is added to your selection.
@@ -405,19 +403,23 @@ export default function CreateEventForm() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="start-hour" className="block text-xs font-bold text-ink-muted mb-1">Earliest</label>
-                    <select id="start-hour" value={startHour} onChange={(e) => changeHours('start', Number(e.target.value))} className={hourSelectClass}>
-                      {HOURS_START.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                    <ScrollSelect
+                      id="start-hour"
+                      ariaLabel="Earliest hour"
+                      options={HOURS_START}
+                      value={startHour}
+                      onChange={(v) => changeHours('start', v)}
+                    />
                   </div>
                   <div>
                     <label htmlFor="end-hour" className="block text-xs font-bold text-ink-muted mb-1">Latest</label>
-                    <select id="end-hour" value={endHour} onChange={(e) => changeHours('end', Number(e.target.value))} className={hourSelectClass}>
-                      {HOURS_END.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                    <ScrollSelect
+                      id="end-hour"
+                      ariaLabel="Latest hour"
+                      options={HOURS_END}
+                      value={endHour}
+                      onChange={(v) => changeHours('end', v)}
+                    />
                   </div>
                 </div>
                 {rangeHint && (
