@@ -131,7 +131,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     return filtered.length > 0 ? filtered : cols
   }, [event, paged, currentPageStart, viewMode, eventDaysOnly])
 
-  // Clamp pageIdx when pageSize or pages change.
+  // Clamp pageIdx when the view or pages change.
   if (pageIdx >= totalPages) {
     setPageIdx(0)
   }
@@ -211,7 +211,9 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [isMobile])
+    // `event` included so the listener re-attaches if the scroll container
+    // remounts after a loading state (ref targets aren't reactive deps).
+  }, [isMobile, event])
 
   if (!event || !myParticipant || !myCommittedBits) {
     return <div className="text-center text-ink-muted">Loading event…</div>
