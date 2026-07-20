@@ -303,6 +303,8 @@ export default function CreateEventForm() {
                   const to = range.to
                   setSelectedDates((prev) => mergeRangeIntoDates(prev, from, to, today))
                   setRangeDraft(undefined)
+                  // One-shot: a completed range hands control back to individual-day picking.
+                  setPickMode('days')
                 } else {
                   setRangeDraft(range)
                 }
@@ -319,22 +321,6 @@ export default function CreateEventForm() {
             Tap a start date, then an end date — the whole span is added to your selection.
           </p>
         )}
-        <div className="flex justify-center mt-3">
-          <Button
-            type="button"
-            variant={datesOnly ? 'primary' : 'secondary'}
-            size="sm"
-            aria-pressed={datesOnly}
-            title={
-              datesOnly
-                ? 'Voters mark which days they’re free — no hourly grid. Tap to bring back time selection.'
-                : 'Skip hourly time selection — voters just mark which days work'
-            }
-            onClick={() => setDatesOnly((v) => !v)}
-          >
-            📅 Date only
-          </Button>
-        </div>
       </Card>
 
       {selectedDates.length > 0 && (
@@ -375,6 +361,23 @@ export default function CreateEventForm() {
           </ul>
         </Card>
       )}
+
+      <div className="flex justify-center">
+        <Button
+          type="button"
+          variant={datesOnly ? 'primary' : 'secondary'}
+          size="sm"
+          aria-pressed={datesOnly}
+          title={
+            datesOnly
+              ? 'Voters mark which days they’re free — no hourly grid. Tap to bring back time selection.'
+              : 'Skip hourly time selection — voters just mark which days work'
+          }
+          onClick={() => setDatesOnly((v) => !v)}
+        >
+          📅 Date only
+        </Button>
+      </div>
 
       <div className="bg-line/40 rounded-[12px]">
         <button
