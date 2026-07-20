@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react'
+import { motion, type HTMLMotionProps } from 'motion/react'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'sm' | 'md' | 'lg'
@@ -17,15 +17,17 @@ const SIZE_CLASSES: Record<Size, string> = {
   lg: 'text-base px-5 py-3 w-full',
 }
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends HTMLMotionProps<'button'> {
   variant?: Variant
   size?: Size
 }
 
 export default function Button({ variant = 'primary', size = 'md', className = '', ...rest }: ButtonProps) {
   return (
-    <button
+    <motion.button
       {...rest}
+      whileTap={{ scale: 0.96 }}
+      transition={{ duration: 0.12 }}
       className={`rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
     />
   )
