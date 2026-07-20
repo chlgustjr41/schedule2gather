@@ -316,12 +316,43 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   // the grid always shows the correct thing for the mode you're in — entering
   // shows what's currently NOT available (ready to paint more busy time onto),
   // exiting converts the busy-painted view back into real availability bits.
-  const toggleNotAvailableMode = async () => {
+  // Slot indices belonging to the CURRENTLY VISIBLE page only (real event
+  // dates, not the greyed out-of-range columns) — "not available" mode only
+  // ever touches what's on screen, never other pages' data.
+  const currentPageSlotIndices = (): number[] =>
+    visibleColumns
+      .filter((c) => c.eventDateIdx !== -1)
+      .flatMap((c) => {
+        const start = c.eventDateIdx * spd
+        return Array.from({ length: spd }, (_, i) => start + i)
+      })
+
+  // Inverts the current page's slots and commits — but only if at least one
+  // of them is currently selected. An all-blank page has nothing meaningful
+  // to invert, so it's left blank rather than lighting up entirely.
+  const invertCurrentPageIfNeeded = async () => {
     if (!myCommittedBits) return
-    const inverted = myCommittedBits.map((b) => !b)
+    const pageSlotIdxs = currentPageSlotIndices()
+    const hasAnySelectedOnPage = pageSlotIdxs.some((idx) => myCommittedBits[idx])
+    if (!hasAnySelectedOnPage) return
+    const next = [...myCommittedBits]
+    for (const idx of pageSlotIdxs) next[idx] = !next[idx]
     pushHistory(myParticipant?.availability ?? '')
+    await updateMyAvailability(pack(next))
+  }
+
+  const toggleNotAvailableMode = async () => {
     setNotAvailableMode((v) => !v)
-    await updateMyAvailability(pack(inverted))
+    await invertCurrentPageIfNeeded()
+  }
+
+  // Leaving the page while the mode is on would otherwise leave data on the
+  // page you're navigating away from sitting in "busy" semantics — treat
+  // navigation as an implicit exit so it's always correctly inverted back.
+  const exitNotAvailableModeForNavigation = async () => {
+    if (!notAvailableMode) return
+    setNotAvailableMode(false)
+    await invertCurrentPageIfNeeded()
   }
 
   const triggerHaptic = () => {
@@ -513,7 +544,9 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               title={interactive ? 'Click to toggle this entire row' : undefined}
             >
               {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
-              <span className={interactive ? 'inline-block bg-raised border border-line rounded-[8px] px-1.5 py-0.5 active:bg-primary/20 select-none' : undefined}>
+              <span
+                className={`flex items-center justify-center w-full select-none ${interactive ? 'bg-raised border border-line rounded-[8px] px-1.5 py-0.5 active:bg-primary/20' : ''}`}
+              >
                 {formatSlotTimeLabel(event, timeIdx, viewerTimezone)}
               </span>
             </td>
@@ -689,6 +722,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           }
           value={viewSize}
           onChange={(v) => {
+            void exitNotAvailableModeForNavigation()
             setViewSize(v)
             setPageIdx(0)
           }}
@@ -809,7 +843,10 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
             variant="secondary"
             size="sm"
             type="button"
-            onClick={() => setPageIdx((p) => Math.max(0, p - 1))}
+            onClick={() => {
+              void exitNotAvailableModeForNavigation()
+              setPageIdx((p) => Math.max(0, p - 1))
+            }}
             disabled={pageIdx === 0}
             aria-label="Previous date page"
           >
@@ -826,7 +863,10 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
             variant="secondary"
             size="sm"
             type="button"
-            onClick={() => setPageIdx((p) => Math.min(totalPages - 1, p + 1))}
+            onClick={() => {
+              void exitNotAvailableModeForNavigation()
+              setPageIdx((p) => Math.min(totalPages - 1, p + 1))
+            }}
             disabled={pageIdx >= totalPages - 1}
             aria-label="Next date page"
           >
