@@ -127,15 +127,19 @@ export default function EventPage() {
                 </p>
                 {event.location && (
                   <p className="text-sm mt-0.5">
-                    <a
-                      href={googleMapsSearchUrl(event.location)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline font-bold"
-                      title="Open this address in Google Maps"
-                    >
-                      📍 {event.location} ↗
-                    </a>
+                    {event.locationIsMapLink ? (
+                      <a
+                        href={googleMapsSearchUrl(event.location)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline font-bold"
+                        title="Open this address in Google Maps"
+                      >
+                        📍 {event.location} ↗
+                      </a>
+                    ) : (
+                      <span className="text-ink-muted">📍 {event.location}</span>
+                    )}
                   </p>
                 )}
                 {participants.length > 0 && (

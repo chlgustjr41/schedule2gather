@@ -17,10 +17,10 @@ import { useAuthStore } from '@/stores/authStore'
 import { COMMON_TIMEZONES, detectTimezone, formatTimezoneLabel } from '@/lib/timezones'
 import { mergeRangeIntoDates, toggleDays } from '@/lib/dateRange'
 import { clampTimeRange } from '@/lib/timeRange'
-import { googleMapsSearchUrl } from '@/lib/googleMaps'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
+import LocationInput from '@/components/LocationInput'
 import ScrollSelect from '@/components/ui/ScrollSelect'
 import SegmentedControl from '@/components/ui/SegmentedControl'
 import Switch from '@/components/ui/Switch'
@@ -50,6 +50,7 @@ export default function CreateEventForm() {
 
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
+  const [locationIsMapLink, setLocationIsMapLink] = useState(false)
   const [startHour, setStartHour] = useState(9)
   const [endHour, setEndHour] = useState(21)
   const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(30)
@@ -149,6 +150,7 @@ export default function CreateEventForm() {
         timezone,
         datesOnly,
         location: location.trim() || undefined,
+        locationIsMapLink,
       })
       navigate(`/e/${slug}`)
     } catch (err: unknown) {
@@ -254,26 +256,12 @@ export default function CreateEventForm() {
         placeholder="Pizza night, team sync, book club…"
       />
 
-      <div>
-        <TextField
-          id="event-location"
-          label="📍 Location (optional)"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          placeholder="Where's it happening? (optional)"
-          maxLength={200}
-        />
-        {location.trim() && (
-          <a
-            href={googleMapsSearchUrl(location.trim())}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block text-xs text-primary hover:underline font-bold mt-1"
-          >
-            🔍 Search on Google Maps ↗
-          </a>
-        )}
-      </div>
+      <LocationInput
+        value={location}
+        onChange={setLocation}
+        isMapLink={locationIsMapLink}
+        onIsMapLinkChange={setLocationIsMapLink}
+      />
 
       <Card>
         <SegmentedControl

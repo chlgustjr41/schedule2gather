@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react'
 import { useEventStore } from '@/stores/eventStore'
 import { bestWindows } from '@/lib/bestSlots'
 import { formatWindowLabel } from '@/lib/ics'
-import { googleMapsSearchUrl } from '@/lib/googleMaps'
 import { finalizeEvent } from '@/services/eventService'
 import { slotsPerDay } from '@/lib/slots'
 import { formatSlotDateLabel, formatSlotTimeLabel } from '@/lib/timezoneSlots'
 import BottomSheet from '@/components/ui/BottomSheet'
 import Button from '@/components/ui/Button'
+import LocationInput from '@/components/LocationInput'
 
 interface FinalizeSheetProps {
   slug: string
@@ -23,6 +23,7 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
   const [customStart, setCustomStart] = useState(0)
   const [customSlots, setCustomSlots] = useState(2)
   const [location, setLocation] = useState(event?.location ?? '')
+  const [locationIsMapLink, setLocationIsMapLink] = useState(event?.locationIsMapLink ?? false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -70,7 +71,7 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
     setSaving(true)
     setError(null)
     try {
-      await finalizeEvent(slug, w, location.trim() || undefined)
+      await finalizeEvent(slug, w, location.trim() || undefined, locationIsMapLink)
       onClose()
     } catch {
       setError("Couldn't save — try again")
@@ -142,30 +143,12 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
             )}
           </div>
         )}
-        <div>
-          <label htmlFor="finalize-location" className="block text-xs font-bold text-ink-muted mb-1">
-            📍 Location (optional)
-          </label>
-          <input
-            id="finalize-location"
-            type="text"
-            maxLength={200}
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="Where's it happening? (optional)"
-            className={selectClass}
-          />
-          {location.trim() && (
-            <a
-              href={googleMapsSearchUrl(location.trim())}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block text-xs text-primary hover:underline font-bold mt-1"
-            >
-              🔍 Search on Google Maps ↗
-            </a>
-          )}
-        </div>
+        <LocationInput
+          value={location}
+          onChange={setLocation}
+          isMapLink={locationIsMapLink}
+          onIsMapLinkChange={setLocationIsMapLink}
+        />
         {error && <p className="text-sm text-danger">{error}</p>}
         <Button size="lg" onClick={() => void handleFinish()} disabled={saving || resolveWindow() === null} className="mt-2">
           {saving ? 'Saving…' : '🏁 Finish vote'}

@@ -60,7 +60,9 @@ export const createEvent = onCall(
       timezone: input.timezone,
       slotCount,
       datesOnly: input.datesOnly ?? false,
-      ...(input.location?.trim() ? { location: input.location.trim() } : {}),
+      ...(input.location?.trim()
+        ? { location: input.location.trim(), locationIsMapLink: input.locationIsMapLink ?? false }
+        : {}),
     })
 
     return { slug }

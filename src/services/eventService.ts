@@ -36,6 +36,8 @@ export interface CreateEventInput {
   datesOnly?: boolean
   /** Optional venue/address, shown to voters and included in the finalize announcement. */
   location?: string
+  /** True when `location` was confirmed via Places search — only then is it rendered as a map link. */
+  locationIsMapLink?: boolean
 }
 
 export interface CreateEventResult {
@@ -75,6 +77,8 @@ export interface EventDoc {
   datesOnly?: boolean
   /** Optional venue/address, shown to voters and included in the finalize announcement. */
   location?: string
+  /** True when `location` was confirmed via Places search — only then is it rendered as a map link. */
+  locationIsMapLink?: boolean
 }
 
 /**
@@ -105,13 +109,14 @@ export async function finalizeEvent(
   slug: string,
   window: { startSlot: number; endSlot: number },
   location?: string,
+  locationIsMapLink?: boolean,
 ): Promise<void> {
   const ref = doc(db, 'events', slug)
   await setDoc(
     ref,
     {
       finalized: { ...window, finalizedAt: serverTimestamp() },
-      ...(location !== undefined ? { location } : {}),
+      ...(location !== undefined ? { location, locationIsMapLink: locationIsMapLink ?? false } : {}),
     },
     { merge: true },
   )
