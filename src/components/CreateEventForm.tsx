@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { COMMON_TIMEZONES, detectTimezone, formatTimezoneLabel } from '@/lib/timezones'
 import { mergeRangeIntoDates, toggleDays } from '@/lib/dateRange'
 import { clampTimeRange } from '@/lib/timeRange'
+import { googleMapsSearchUrl } from '@/lib/googleMaps'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
@@ -253,14 +254,26 @@ export default function CreateEventForm() {
         placeholder="Pizza night, team sync, book club…"
       />
 
-      <TextField
-        id="event-location"
-        label="📍 Location (optional)"
-        value={location}
-        onChange={(e) => setLocation(e.target.value)}
-        placeholder="Where's it happening? (optional)"
-        maxLength={200}
-      />
+      <div>
+        <TextField
+          id="event-location"
+          label="📍 Location (optional)"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="Where's it happening? (optional)"
+          maxLength={200}
+        />
+        {location.trim() && (
+          <a
+            href={googleMapsSearchUrl(location.trim())}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block text-xs text-primary hover:underline font-bold mt-1"
+          >
+            🔍 Search on Google Maps ↗
+          </a>
+        )}
+      </div>
 
       <Card>
         <SegmentedControl

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useEventStore } from '@/stores/eventStore'
 import { bestWindows } from '@/lib/bestSlots'
 import { formatWindowLabel } from '@/lib/ics'
+import { googleMapsSearchUrl } from '@/lib/googleMaps'
 import { finalizeEvent } from '@/services/eventService'
 import { slotsPerDay } from '@/lib/slots'
 import { formatSlotDateLabel, formatSlotTimeLabel } from '@/lib/timezoneSlots'
@@ -154,6 +155,16 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
             placeholder="Where's it happening? (optional)"
             className={selectClass}
           />
+          {location.trim() && (
+            <a
+              href={googleMapsSearchUrl(location.trim())}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-xs text-primary hover:underline font-bold mt-1"
+            >
+              🔍 Search on Google Maps ↗
+            </a>
+          )}
         </div>
         {error && <p className="text-sm text-danger">{error}</p>}
         <Button size="lg" onClick={() => void handleFinish()} disabled={saving || resolveWindow() === null} className="mt-2">

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useEventStore } from '@/stores/eventStore'
 import { useAuthStore } from '@/stores/authStore'
 import { loadParticipantsForEvent } from '@/lib/participantId'
+import { googleMapsSearchUrl } from '@/lib/googleMaps'
 import { setOwnerEmail, touchLastVisited } from '@/services/eventService'
 import { registerPresence, subscribeToPresence } from '@/services/presenceService'
 import JoinScreen from '@/components/JoinScreen'
@@ -125,7 +126,17 @@ export default function EventPage() {
                   {event.slotMinutes} min slots
                 </p>
                 {event.location && (
-                  <p className="text-sm text-ink-muted mt-0.5">📍 {event.location}</p>
+                  <p className="text-sm mt-0.5">
+                    <a
+                      href={googleMapsSearchUrl(event.location)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline font-bold"
+                      title="Open this address in Google Maps"
+                    >
+                      📍 {event.location} ↗
+                    </a>
+                  </p>
                 )}
                 {participants.length > 0 && (
                   <div className="flex items-center mt-2">
