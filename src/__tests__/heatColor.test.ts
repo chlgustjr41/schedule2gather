@@ -19,4 +19,10 @@ describe('mineColor', () => {
     expect(mineColor(true)).toBe('var(--s2g-mine)')
     expect(mineColor(false)).toBe('var(--s2g-slot-empty)')
   })
+
+  it('shows the danger color for painted cells in "not available" mode', () => {
+    expect(mineColor(true, true)).toBe('var(--s2g-danger)')
+    // Unpainted cells look the same regardless of mode.
+    expect(mineColor(false, true)).toBe('var(--s2g-slot-empty)')
+  })
 })

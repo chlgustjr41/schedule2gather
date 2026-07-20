@@ -68,6 +68,13 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   })
   const [eventDaysOnly, setEventDaysOnly] = useState(true)
   const [dateOnlyView, setDateOnlyView] = useState<'all' | 'week' | 'month'>(() => (isMobile ? 'week' : 'all'))
+  // "Not available" paint mode: while on, painting marks busy times (shown in
+  // the danger color instead of the mine color) rather than free ones. Turning
+  // it back off inverts whatever was actually painted during that session, so
+  // what was marked busy becomes unavailable and everything else becomes
+  // available — lets someone who's mostly free just mark their few conflicts.
+  const [notAvailableMode, setNotAvailableMode] = useState(false)
+  const [bitsAtModeStart, setBitsAtModeStart] = useState<string | null>(null)
 
   const changeZoom = (dir: 1 | -1) =>
     setZoom((z) => {
@@ -307,6 +314,25 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     await updateMyAvailability(pack(next))
   }
 
+  const toggleNotAvailableMode = async () => {
+    if (!notAvailableMode) {
+      // Turning on: remember the bits as they stood before this painting session.
+      setBitsAtModeStart(myParticipant?.availability ?? '')
+      setNotAvailableMode(true)
+      return
+    }
+    // Turning off: only invert if something was actually painted while it was
+    // on — an accidental on/off toggle with no painting is a safe no-op.
+    setNotAvailableMode(false)
+    const startBits = bitsAtModeStart
+    setBitsAtModeStart(null)
+    if (startBits === null || !myCommittedBits) return
+    if ((myParticipant?.availability ?? '') === startBits) return
+    const inverted = myCommittedBits.map((b) => !b)
+    pushHistory(myParticipant?.availability ?? '')
+    await updateMyAvailability(pack(inverted))
+  }
+
   const triggerHaptic = () => {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       try {
@@ -514,7 +540,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               const dateIdx = col.eventDateIdx
               const slotIdx = dateIdx * spd + timeIdx
               const mine = myDisplayBits[slotIdx]
-              const bg = mineColor(mine)
+              const bg = mineColor(mine, notAvailableMode)
               return (
                 <td
                   key={slotIdx}
@@ -691,6 +717,20 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           onClick={() => void setAllUnavailable()}
         >
           Clear all
+        </Button>
+        <Button
+          variant={notAvailableMode ? 'danger' : 'secondary'}
+          size="sm"
+          type="button"
+          aria-pressed={notAvailableMode}
+          onClick={() => void toggleNotAvailableMode()}
+          title={
+            notAvailableMode
+              ? 'Paint your busy times, then tap again to flip everything — busy becomes unavailable, the rest becomes available'
+              : 'Switch to marking when you\'re NOT available instead of when you are'
+          }
+        >
+          🚫 {notAvailableMode ? 'Done — flip busy times' : 'Mark unavailable'}
         </Button>
         <div className="flex items-center gap-1 ml-auto">
           <button
