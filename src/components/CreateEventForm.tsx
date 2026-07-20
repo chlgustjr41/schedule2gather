@@ -340,11 +340,11 @@ export default function CreateEventForm() {
               Clear all
             </button>
           </div>
-          <ul className="max-h-40 overflow-y-auto divide-y divide-line">
+          <ul className="max-h-40 overflow-y-auto pr-1 divide-y divide-line">
             {[...selectedDates]
               .sort((a, b) => a.getTime() - b.getTime())
               .map((d) => (
-                <li key={d.toDateString()} className="flex items-center justify-between px-1 py-1.5 text-sm">
+                <li key={d.toDateString()} className="flex items-center justify-between gap-2 pl-1 pr-3 py-1 text-sm">
                   <span className="font-bold">{format(d, 'EEE, MMM d')}</span>
                   <button
                     type="button"
@@ -352,7 +352,7 @@ export default function CreateEventForm() {
                     onClick={() =>
                       setSelectedDates((prev) => prev.filter((x) => x.toDateString() !== d.toDateString()))
                     }
-                    className="text-ink-muted hover:text-danger px-1"
+                    className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full text-base text-ink-muted hover:text-danger hover:bg-raised"
                   >
                     ×
                   </button>
@@ -362,31 +362,33 @@ export default function CreateEventForm() {
         </Card>
       )}
 
-      <div className="flex justify-center">
-        <Button
-          type="button"
-          variant={datesOnly ? 'primary' : 'secondary'}
-          size="sm"
-          aria-pressed={datesOnly}
-          title={
-            datesOnly
-              ? 'Voters mark which days they’re free — no hourly grid. Tap to bring back time selection.'
-              : 'Skip hourly time selection — voters just mark which days work'
-          }
-          onClick={() => setDatesOnly((v) => !v)}
-        >
-          📅 Date only
-        </Button>
-      </div>
-
       <div className="bg-line/40 rounded-[12px]">
+        <div className="flex justify-end px-4 pt-2">
+          <button
+            type="button"
+            onClick={() => setDatesOnly((v) => !v)}
+            aria-pressed={datesOnly}
+            title={
+              datesOnly
+                ? 'Voters mark which days they’re free — no hourly grid. Tap to bring back time selection.'
+                : 'Skip hourly time selection — voters just mark which days work'
+            }
+            className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-[8px] border-[1.5px] transition ${
+              datesOnly
+                ? 'bg-primary text-on-primary border-primary'
+                : 'bg-surface text-ink-muted border-line hover:bg-raised'
+            }`}
+          >
+            📅 Date only
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => setAdvancedOpen((v) => !v)}
           disabled={datesOnly}
           aria-expanded={advancedOpen}
           title={datesOnly ? 'Not needed for date-only events' : undefined}
-          className={`w-full flex items-center justify-between px-4 py-2.5 text-sm font-bold text-ink-muted ${
+          className={`w-full flex items-center justify-between px-4 py-1.5 text-sm font-bold text-ink-muted ${
             datesOnly ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
