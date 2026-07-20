@@ -451,7 +451,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       <thead>
         <tr role="row">
           <th
-            className={`w-20 ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
+            className={`w-16 ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
             aria-hidden="true"
           ></th>
           {visibleColumns.map((col) => {
@@ -492,7 +492,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               role="rowheader"
               scope="row"
               onClick={interactive ? () => void toggleRow(timeIdx) : undefined}
-              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-2 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
+              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-1 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
               title={interactive ? 'Click to toggle this entire row' : undefined}
             >
               {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
