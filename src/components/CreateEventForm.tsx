@@ -22,6 +22,7 @@ import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import ScrollSelect from '@/components/ui/ScrollSelect'
 import SegmentedControl from '@/components/ui/SegmentedControl'
+import Switch from '@/components/ui/Switch'
 import TextField from '@/components/ui/TextField'
 import WheelPicker from '@/components/ui/WheelPicker'
 
@@ -363,25 +364,23 @@ export default function CreateEventForm() {
       )}
 
       <div className="bg-line/40 rounded-[12px]">
-        <div className="flex justify-end px-4 pt-2">
-          <button
-            type="button"
-            onClick={() => setDatesOnly((v) => !v)}
-            aria-pressed={datesOnly}
+        <div className="flex justify-start px-4 pt-2">
+          <Switch
+            checked={datesOnly}
+            onChange={setDatesOnly}
+            label="📅 Date only"
             title={
               datesOnly
                 ? 'Voters mark which days they’re free — no hourly grid. Tap to bring back time selection.'
                 : 'Skip hourly time selection — voters just mark which days work'
             }
-            className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-[8px] border-[1.5px] transition ${
-              datesOnly
-                ? 'bg-primary text-on-primary border-primary'
-                : 'bg-surface text-ink-muted border-line hover:bg-raised'
-            }`}
-          >
-            📅 Date only
-          </button>
+          />
         </div>
+        {datesOnly && (
+          <p className="px-4 pt-1 text-xs text-ink-muted">
+            Time-slot voting is off — voters will only pick which days work.
+          </p>
+        )}
         <button
           type="button"
           onClick={() => setAdvancedOpen((v) => !v)}
