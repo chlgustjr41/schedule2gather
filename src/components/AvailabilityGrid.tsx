@@ -69,12 +69,10 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   const [eventDaysOnly, setEventDaysOnly] = useState(true)
   const [dateOnlyView, setDateOnlyView] = useState<'all' | 'week' | 'month'>(() => (isMobile ? 'week' : 'all'))
   // "Not available" paint mode: while on, painting marks busy times (shown in
-  // the danger color instead of the mine color) rather than free ones. Turning
-  // it back off inverts whatever was actually painted during that session, so
-  // what was marked busy becomes unavailable and everything else becomes
-  // available — lets someone who's mostly free just mark their few conflicts.
+  // the danger color instead of the mine color) rather than free ones. Every
+  // toggle of this mode (on or off) inverts the current bits — see
+  // toggleNotAvailableMode — so entering and exiting are fully symmetric.
   const [notAvailableMode, setNotAvailableMode] = useState(false)
-  const [bitsAtModeStart, setBitsAtModeStart] = useState<string | null>(null)
 
   const changeZoom = (dir: 1 | -1) =>
     setZoom((z) => {
@@ -314,22 +312,15 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     await updateMyAvailability(pack(next))
   }
 
+  // Symmetric: every toggle (either direction) inverts the current bits, so
+  // the grid always shows the correct thing for the mode you're in — entering
+  // shows what's currently NOT available (ready to paint more busy time onto),
+  // exiting converts the busy-painted view back into real availability bits.
   const toggleNotAvailableMode = async () => {
-    if (!notAvailableMode) {
-      // Turning on: remember the bits as they stood before this painting session.
-      setBitsAtModeStart(myParticipant?.availability ?? '')
-      setNotAvailableMode(true)
-      return
-    }
-    // Turning off: only invert if something was actually painted while it was
-    // on — an accidental on/off toggle with no painting is a safe no-op.
-    setNotAvailableMode(false)
-    const startBits = bitsAtModeStart
-    setBitsAtModeStart(null)
-    if (startBits === null || !myCommittedBits) return
-    if ((myParticipant?.availability ?? '') === startBits) return
+    if (!myCommittedBits) return
     const inverted = myCommittedBits.map((b) => !b)
     pushHistory(myParticipant?.availability ?? '')
+    setNotAvailableMode((v) => !v)
     await updateMyAvailability(pack(inverted))
   }
 
@@ -477,7 +468,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       <thead>
         <tr role="row">
           <th
-            className={`w-16 ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
+            className={`w-20 ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
             aria-hidden="true"
           ></th>
           {visibleColumns.map((col) => {
@@ -518,7 +509,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               role="rowheader"
               scope="row"
               onClick={interactive ? () => void toggleRow(timeIdx) : undefined}
-              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-1 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
+              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-1 align-top whitespace-nowrap select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
               title={interactive ? 'Click to toggle this entire row' : undefined}
             >
               {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
@@ -726,11 +717,11 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           onClick={() => void toggleNotAvailableMode()}
           title={
             notAvailableMode
-              ? 'Paint your busy times, then tap again to flip everything — busy becomes unavailable, the rest becomes available'
-              : 'Switch to marking when you\'re NOT available instead of when you are'
+              ? 'Now painting busy times — tap to flip back to your real availability'
+              : 'Flips your grid to paint busy times instead of free ones'
           }
         >
-          🚫 {notAvailableMode ? 'Done — flip busy times' : 'Mark unavailable'}
+          🚫 {notAvailableMode ? 'Done — flip back' : 'Mark unavailable'}
         </Button>
         <div className="flex items-center gap-1 ml-auto">
           <button
