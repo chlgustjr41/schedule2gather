@@ -12,10 +12,24 @@ service cloud.firestore {
       allow read: if true;
       allow create: if false;
       // Host: full update (finalize/reopen, ownerEmail). Anyone signed in
-      // (incl. anonymous): may bump ONLY the visit timestamp used by GC.
+      // (incl. anonymous): may bump ONLY the visit timestamp used by GC, or
+      // edit ONLY name/location/description — intentionally open so any
+      // participant can fix a typo or add details, not just the host.
       allow update: if request.auth.uid == resource.data.ownerUid
                     || (request.auth != null
-                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastVisitedAt']));
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastVisitedAt']))
+                    || (request.auth != null
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['name', 'location', 'description'])
+                        && request.resource.data.name is string
+                        && request.resource.data.name.size() > 0
+                        && request.resource.data.name.size() <= 80
+                        && (!('location' in request.resource.data)
+                            || (request.resource.data.location is string
+                                && request.resource.data.location.size() <= 200))
+                        && (!('description' in request.resource.data)
+                            || (request.resource.data.description is string
+                                && request.resource.data.description.size() <= 1000)));
       allow delete: if request.auth.uid == resource.data.ownerUid;
 
       match /participants/{participantId} {

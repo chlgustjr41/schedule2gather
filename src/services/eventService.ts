@@ -110,6 +110,18 @@ export async function setOwnerEmail(slug: string, email: string): Promise<void> 
 }
 
 /**
+ * Open editing (enforced by rules): any signed-in viewer — not just the host —
+ * may update the event's name/location/description.
+ */
+export async function updateEventText(
+  slug: string,
+  fields: { name: string; location: string; description: string },
+): Promise<void> {
+  const ref = doc(db, 'events', slug)
+  await setDoc(ref, fields, { merge: true })
+}
+
+/**
  * Host-only (enforced by rules): lock the vote to a final window. Passing
  * `location` writes/updates it in the same merge — finalizing is the second
  * of the two points (alongside event creation) where the host can set it.
