@@ -38,6 +38,8 @@ export interface CreateEventInput {
   location?: string
   /** True when `location` was confirmed via Places search — only then is it rendered as a map link. */
   locationIsMapLink?: boolean
+  /** Optional free-text details shown to voters on the event page. */
+  description?: string
 }
 
 export interface CreateEventResult {
@@ -49,7 +51,12 @@ export interface CreateEventResult {
  */
 export async function createEvent(input: CreateEventInput): Promise<CreateEventResult> {
   const callable = httpsCallable<CreateEventInput, CreateEventResult>(getFunctionsClient(), 'createEvent')
-  const result = await callable(input)
+  // The callable encoder serializes undefined values as null; drop absent
+  // fields entirely so the server sees a clean payload (see joinWithNameRemote).
+  const payload = Object.fromEntries(
+    Object.entries(input).filter(([, v]) => v !== undefined),
+  ) as CreateEventInput
+  const result = await callable(payload)
   return result.data
 }
 
@@ -79,6 +86,8 @@ export interface EventDoc {
   location?: string
   /** True when `location` was confirmed via Places search — only then is it rendered as a map link. */
   locationIsMapLink?: boolean
+  /** Optional free-text details shown to voters on the event page. */
+  description?: string
 }
 
 /**

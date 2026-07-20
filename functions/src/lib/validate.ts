@@ -24,6 +24,8 @@ export interface CreateEventInput {
   location?: string
   /** True when `location` was confirmed via Places search — only then is it rendered as a map link. */
   locationIsMapLink?: boolean
+  /** Optional free-text details shown to voters on the event page. */
+  description?: string
 }
 
 /**
@@ -131,13 +133,14 @@ export function validateCreateEventInput(input: unknown): asserts input is Creat
     throw new ValidationError(`slotMinutes must be one of: ${SLOT_MINUTES.join(', ')}`)
   }
 
-  // datesOnly (optional)
-  if (i.datesOnly !== undefined && typeof i.datesOnly !== 'boolean') {
+  // datesOnly (optional) — `!= null` (not `!== undefined`) because the callable
+  // SDK serializes an omitted/undefined field as `null` on the wire.
+  if (i.datesOnly != null && typeof i.datesOnly !== 'boolean') {
     throw new ValidationError('datesOnly must be a boolean')
   }
 
   // location (optional)
-  if (i.location !== undefined) {
+  if (i.location != null) {
     if (typeof i.location !== 'string') {
       throw new ValidationError('location must be a string')
     }
@@ -147,8 +150,18 @@ export function validateCreateEventInput(input: unknown): asserts input is Creat
   }
 
   // locationIsMapLink (optional)
-  if (i.locationIsMapLink !== undefined && typeof i.locationIsMapLink !== 'boolean') {
+  if (i.locationIsMapLink != null && typeof i.locationIsMapLink !== 'boolean') {
     throw new ValidationError('locationIsMapLink must be a boolean')
+  }
+
+  // description (optional)
+  if (i.description != null) {
+    if (typeof i.description !== 'string') {
+      throw new ValidationError('description must be a string')
+    }
+    if (i.description.trim().length > 1000) {
+      throw new ValidationError('description must be 1000 chars or fewer')
+    }
   }
 
   // timezone

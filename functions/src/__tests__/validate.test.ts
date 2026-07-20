@@ -221,3 +221,33 @@ describe('computeSlotCount', () => {
     ).toBe(48)
   })
 })
+
+describe('optional fields sent as null', () => {
+  // The Firebase callable SDK serializes an omitted/undefined field as `null`
+  // on the wire (see joinWithNameRemote's client-side workaround). Regression
+  // guard: leaving location/description/datesOnly/locationIsMapLink blank in
+  // the create form must not fail validation.
+  it('accepts location/description/datesOnly/locationIsMapLink as null', () => {
+    expect(() =>
+      validateCreateEventInput({
+        ...validSpecificDates,
+        location: null,
+        description: null,
+        datesOnly: null,
+        locationIsMapLink: null,
+      }),
+    ).not.toThrow()
+  })
+
+  it('still rejects a non-string location that is not null/undefined', () => {
+    expect(() => validateCreateEventInput({ ...validSpecificDates, location: 42 })).toThrow(
+      ValidationError,
+    )
+  })
+
+  it('still rejects a non-string description that is not null/undefined', () => {
+    expect(() => validateCreateEventInput({ ...validSpecificDates, description: 42 })).toThrow(
+      ValidationError,
+    )
+  })
+})
