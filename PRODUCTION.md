@@ -535,6 +535,38 @@ alongside v1.3's `deleteEvent`).
 
 Full spec: `docs/superpowers/specs/2026-07-19-v1.4-auth-join-polish-design.md`.
 
+### 2026-07 v1.5 ✅ COMPLETE 2026-07
+
+**Goal:** Calendar row/column selection, a standalone selected-dates card, and desktop grid views —
+client-only, two components plus one pure helper; no backend/rules/Functions changes.
+
+- ✅ **Weekday-column & week-row calendar selection** (`CreateEventForm`, `src/lib/dateRange.ts`): a
+  new pure `toggleDays(existing, candidates)` helper (add-missing / remove-all-present, dedupes by
+  calendar day; unit-tested) powers two new affordances. An `S M T W T F S` chip row above each
+  visible month toggles that month's future occurrences of a weekday, and clickable week-number cells
+  (`showWeekNumber` + a `components.WeekNumber` override) toggle a whole week's future days — both in
+  Pick days *and* Date range modes, always mutating `selectedDates` directly. Two adaptive notes: the
+  weekday chip row is used instead of a `components.Weekday` override because react-day-picker v9
+  passes that component no weekday/month context (only generic `<th>` attributes), and the week-row
+  uses the `WeekNumber` override because v9's `onWeekNumberClick` prop is dead (declared `any`, never
+  invoked in the library).
+- ✅ **Standalone selected-dates card**: the `{n} selected · Clear all` cluster and the
+  above-calendar list from v1.4 move into their own `Card` below the calendar (a `SELECTED DATES · {n}`
+  header + `Clear all`, over the sorted scrollable removable list), decluttering the calendar card.
+- ✅ **Desktop grid views** (`AvailabilityGrid`): the mobile-only Week/Month control becomes a
+  viewport-aware `viewSize` control — `All | Week | Month` on desktop (default **All**), `Week |
+  Month` on mobile (default **Week**). Pagination, the "Event days only" toggle, and the sticky
+  time-column/scrollable-month behavior all un-gate from `isMobile` to a `paged` (`viewSize !== 'all'`)
+  derivation, so desktop Week/Month views page and filter just like mobile; keyboard arrow-navigation
+  page-jumping now keys on `paged` too, so crossing a page boundary advances the page on desktop.
+- ✅ **Paint toggle in both mobile views + desktop wheel scroll**: the mobile **Paint mode** toggle
+  now shows in both Week and Month views (Week is no longer always-paint). Desktop has no toggle
+  (painting always on); instead a non-passive `wheel` listener on the grid's scroll container
+  converts vertical wheel gestures to horizontal scroll when the table overflows and the gesture is
+  vertical-dominant.
+
+Full spec: `docs/superpowers/specs/2026-07-19-v1.5-calendar-grid-views-design.md`.
+
 ---
 
 ## 13. Implementation Discipline

@@ -9,7 +9,11 @@ join-by-code, a dedicated `/new` create route, an owner `/dashboard`, and the `d
 callable — and the v1.4 auth/join polish
 (`docs/superpowers/specs/2026-07-19-v1.4-auth-join-polish-design.md`) — instant sign-in/sign-out
 state, 1h-inactivity auto-logoff, a claim-or-create join flow with optional passcodes, a tinted
-header band, and create-form/grid layout rework. Painting mechanics (drag paintbrush,
+header band, and create-form/grid layout rework — and the v1.5 calendar-selection + grid-views pass
+(`docs/superpowers/specs/2026-07-19-v1.5-calendar-grid-views-design.md`) — clickable weekday-column
+and week-row calendar selection, a standalone selected-dates card, desktop Week/Month/All grid views
+with wheel-to-horizontal scroll, and a paint-mode toggle in both mobile grid views. Painting
+mechanics (drag paintbrush,
 paint-mode/scroll gating, undo/redo, autosave, haptics, keyboard nav, ARIA) are retained unchanged
 from earlier phases and reskinned onto the new tokens — not rebuilt.
 
@@ -76,16 +80,30 @@ calendar's day cells get comfortable touch targets — **42×42px minimum**, 15p
 inter-cell gap — via a `max-width: 767px` rule in `src/index.css`; desktop keeps the tighter
 default spacing.
 
-**Selected-dates list** (v1.4, replacing the v1.2 chips row): the quick-select row itself now ends
-in a right-aligned `{n} selected · Clear all` cluster (`Clear all` clears both `selectedDates` and
-any in-progress range draft) — there is no separate count/clear line below the calendar anymore.
-Directly under that row, once at least one date is picked, a scrollable list appears **above the
-calendar**: one row per selected date, sorted ascending — `Mon, Jul 27` left-aligned, a right-aligned
-`×` remove button — `text-sm` rows separated by hairlines inside a `max-h-40 overflow-y-auto`
-container (roughly 6 rows visible before it scrolls), hidden entirely when nothing is selected. It
-works identically in both pick modes (removing a row only ever edits `selectedDates`, never
-`rangeDraft`). The range-mode hint paragraph ("Tap a start date, then an end date…") still renders
-under the calendar, unchanged.
+**Weekday-column & week-row selection** (v1.5): above each visible month sits a 7-button chip row
+(`S M T W T F S`); tapping a chip toggles every *future* occurrence of that weekday in that month
+into (or out of) the selection via the pure `toggleDays` helper (`src/lib/dateRange.ts`) — if every
+candidate day is already selected they are all removed, otherwise the missing ones are added; each
+month's chip row acts only on its own month. (The chip row is used instead of restyling the
+calendar's own weekday headers because react-day-picker v9's `components.Weekday` override receives
+no weekday or month context — only generic `<th>` attributes.) The calendar also renders clickable
+week-number cells (`showWeekNumber`, styled via `.rdp-week_number` in `src/index.css`): each is a
+`components.WeekNumber` override that toggles that whole week's future days (v9's `onWeekNumberClick`
+prop is dead — declared `any` and never invoked — so the component override is the supported hook).
+Both affordances work identically in `Pick days` and `Date range` modes, mutating `selectedDates`
+directly and never the range draft.
+
+**Selected-dates card** (v1.5, replacing the v1.4 above-calendar list): the quick-select row is back
+to just the centered per-month quick-select columns — the `{n} selected · Clear all` cluster has
+moved out of it. Once at least one date is picked, a **separate `Card` directly below the calendar**
+appears: a `SELECTED DATES · {n}` micro-label header with a right-aligned `Clear all` button (clears
+both `selectedDates` and any in-progress range draft), and a body that is the sorted, scrollable
+removable list — one row per date (`Mon, Jul 27` left-aligned, a right-aligned `×` remove button),
+`text-sm` rows separated by hairlines inside a `max-h-40 overflow-y-auto` container — hidden entirely
+when nothing is selected. It works identically in both pick modes (removing a row only ever edits
+`selectedDates`, never `rangeDraft`). The calendar `Card` itself now keeps only the mode toggle,
+quick-select rows, weekday chips, calendar, and the range-mode hint ("Tap a start date, then an end
+date…") — no count or list remnant.
 
 **Advanced settings time range** (v1.2, mobile only): when `useIsMobile()`, the Earliest/Latest
 fields in the Advanced settings panel render as a pair of side-by-side `WheelPicker` scroll wheels
@@ -185,15 +203,20 @@ either flow: every committed stroke calls
 `updateMyAvailability`, which writes straight to Firestore.
 
 **Grid controls layout (v1.4 rework, `AvailabilityGrid`):** three rows now bracket the table instead
-of one toolbar above it. **Above the table** (interactive grids only): the `Week`/`Month`
-`SegmentedControl` (mobile) plus `Mark all available` / `Clear all` pill buttons on the left, and a
+of one toolbar above it. **Above the table** (interactive grids only): the view-size
+`SegmentedControl` (v1.5: `All` / `Week` / `Month` on desktop, default **All**; `Week` / `Month` on
+mobile, default **Week** — switching views resets to the first page) plus `Mark all available` /
+`Clear all` pill buttons on the left, and a
 visually separate `ml-auto` cluster on the right holding **Undo**/**Redo** as icon-only circular
 buttons (`↺`/`↻`, `w-9 h-9 rounded-full border border-line bg-surface`, disabled/`opacity-40` at
 each end of the history stack) — their `title`/`aria-label` still carry the `Ctrl+Z`/`Ctrl+Shift+Z`
 (`⌘Z`/`⌘⇧Z` on Mac) hotkey hint, unchanged from v1.1. **Below the table**, rendered after the table
-wrapper and before the mobile pagination row (and, unlike the toolbar above, still shown on
+wrapper and before the pagination row (and, unlike the toolbar above, still shown on
 `readOnly`/finalized grids — the view controls, not the paint controls): the **− / +** zoom control
-and, on mobile, the **"Event days only"** toggle described below.
+and, in any paged view (v1.5: mobile, or desktop in Week/Month view), the **"Event days only"**
+toggle described below. Since v1.5 the pagination and event-days logic key on a `paged`
+(`viewSize !== 'all'`) derivation rather than on `isMobile`, so desktop Week/Month views page and
+filter exactly like mobile.
 
 **Header chip affordance (v1.4):** on interactive grids, every day-column header and time-row
 header renders its label inside a chip — `bg-raised border border-line rounded-[8px] px-1.5 py-0.5
@@ -207,13 +230,25 @@ row-header/time-label text stepping between `text-[10px]` / `text-xs` / `text-sm
 buttons disable at each end of the scale. The chosen zoom persists to
 `localStorage['s2g-grid-zoom']` (best-effort, wrapped in try/catch for private browsing; an
 unrecognized stored value falls back to `md`) and is available at every viewport, not just mobile.
-On mobile only, a **"Event days only"** toggle (`aria-pressed`, default **on**) sits alongside it:
+Whenever the grid is paged (v1.5: mobile, or desktop in Week/Month view), a **"Event days only"**
+toggle (`aria-pressed`, default **on**) sits alongside it:
 when on, the paginated week/month grid filters out columns for dates outside the event
 (`eventDateIdx === -1`) and drops any week/month page that would contain zero event dates from the
 Prev/Next pager entirely, so a sparse event (e.g. three Saturdays) doesn't force thumb-paging
 through empty weeks; switching it off restores the full calendar, greyed out-of-range columns
 included. If filtering would ever leave zero pages, the toggle is ignored and the full page set
 renders instead (defensive — shouldn't happen for a valid event).
+
+**Paint mode & desktop wheel scroll (v1.5):** on mobile the **Paint mode** toggle now renders in
+*both* the Week and Month grid views (previously the Week view was always-paint) — off means a
+touch-drag scrolls the grid instead of painting, on means it paints, with each cell's `touch-action`
+following the toggle. On desktop there is no toggle: painting is always active (`effectivePaintMode`
+is forced `true`), and instead a non-passive `wheel` listener on the grid's `overflow-x-auto` scroll
+container converts a vertical mouse-wheel gesture into horizontal scrolling — but only when the table
+actually overflows and the gesture is vertical-dominant (`|deltaY| > |deltaX|`), so a grid that fits
+still scrolls the page normally and trackpad horizontal gestures are left alone. Desktop Week and
+Month views reuse the same sticky time-column + scroll container as mobile, so a wide month scrolls
+within the grid rather than pushing the page sideways.
 
 ## Finish the vote (host)
 
@@ -334,8 +369,8 @@ grid and its `useMinWidth` hook are gone. The remaining responsive differences:
 |---|---|
 | `<640px` (Tailwind default, no `sm:`) | `BottomSheet` (used by `ExportSheet` and `FinalizeSheet`) renders as a sheet anchored to the bottom of the viewport |
 | `≥640px` (Tailwind `sm:`) | `BottomSheet` renders as a centered modal — see `docs/design-system.md` "Documented deviations" for why this is 640px rather than the spec's originally-stated 768px |
-| `<768px` (`useIsMobile()` true) | Create-flow calendar shows 1 month at a time, with ≥42px day touch targets and the scrollable selected-dates list above the calendar (v1.4); Advanced settings' Earliest/Latest fields render as `WheelPicker` scroll wheels; the event-page My-times grid switches to paginated week/month view (`SegmentedControl` for Week/Month, Prev/Next paging, `X/Y` page indicator) with an added "Event days only" toggle (default on) |
-| `≥768px` | Create-flow calendar shows 2 months side by side with native `<select>` Earliest/Latest dropdowns; the event-page My-times grid shows every event date in one unpaginated table (no "Event days only" toggle — nothing to filter) |
+| `<768px` (`useIsMobile()` true) | Create-flow calendar shows 1 month at a time, with ≥42px day touch targets, a weekday-chip row above the month, and the standalone selected-dates card below the calendar (v1.5); Advanced settings' Earliest/Latest fields render as `WheelPicker` scroll wheels; the event-page My-times grid defaults to a paginated **Week** view (Week/Month `SegmentedControl`, Prev/Next paging, `X/Y` page indicator, "Event days only" toggle default on) and shows a **Paint mode** toggle in both Week and Month views (v1.5) |
+| `≥768px` | Create-flow calendar shows 2 months side by side (each with its own weekday-chip row, v1.5) with native `<select>` Earliest/Latest dropdowns; the event-page My-times grid defaults to the **All** view (every event date, unpaginated) but can switch to paginated **Week**/**Month** views (v1.5, with the "Event days only" toggle and Prev/Next paging); painting is always on (no paint toggle) and a vertical wheel over an overflowing grid scrolls it horizontally |
 | all widths | The grid's − / + zoom control (3 persisted cell sizes, `localStorage['s2g-grid-zoom']`) is available regardless of breakpoint |
 
 ## Accessibility
@@ -350,8 +385,9 @@ grid and its `useMinWidth` hook are gone. The remaining responsive differences:
   names + count-of-total) for screen readers; there's no `role="grid"`/row/column-header structure
   since it's read-only and has no per-cell selection concept.
 - **Keyboard map:** Arrow keys move focus one slot at a time within the My-times grid (roving
-  `tabIndex`, clamped at the grid edges and, on mobile, auto-paging when focus crosses into an
-  adjacent week/month page); `Space` or `Enter` toggles the focused slot; `Ctrl+Z` (⌘Z on Mac) undoes
+  `tabIndex`, clamped at the grid edges and, in any paged view (v1.5: mobile, or desktop Week/Month),
+  auto-paging when focus crosses into an adjacent week/month page); `Space` or `Enter` toggles the
+  focused slot; `Ctrl+Z` (⌘Z on Mac) undoes
   the last committed stroke and `Ctrl+Shift+Z` (⌘⇧Z) redoes it, both also exposed as buttons with
   matching `title`/`aria-label` hints. Hotkeys are suppressed while focus is inside an `<input>`,
   `<textarea>`, or any `contenteditable` element. `GroupHeatmap` cells are plain tab-focusable
