@@ -273,6 +273,27 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   // is what lets the same helper translate real→display and display→real.
   const applyLens = (bit: boolean): boolean => (notAvailableMode ? !bit : bit)
 
+  // Whether the CURRENTLY VISIBLE page (real event dates only, not the greyed
+  // out-of-range columns) has anything painted at all. Used to decide whether
+  // rendering should apply the lens — see renderLens.
+  const currentPageHasAnyColored = visibleColumns
+    .filter((c) => c.eventDateIdx !== -1)
+    .some((c) => {
+      const start = c.eventDateIdx * spd
+      for (let i = 0; i < spd; i++) {
+        if (myDisplayBits[start + i]) return true
+      }
+      return false
+    })
+
+  // Rendering-only: an as-yet-untouched page skips the flip entirely and
+  // stays visually blank in either mode, rather than flashing to a wall of
+  // red the moment the mode opens. Explicit bulk actions (Mark all/Clear
+  // all/row/column toggles) intentionally keep using the unconditional
+  // applyLens above — those always mean what the button says, regardless of
+  // whether the page happens to be blank beforehand.
+  const renderLens = (bit: boolean): boolean => (currentPageHasAnyColored ? applyLens(bit) : bit)
+
   const toggleColumn = async (dateIdx: number) => {
     if (!myCommittedBits) return
     const startIdx = dateIdx * spd
@@ -482,9 +503,11 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                   key={col.dateStr}
                   role="columnheader"
                   scope="col"
-                  className="p-2 text-sm font-medium text-ink-muted/50 select-none"
+                  className="w-28 p-2 text-sm font-medium text-ink-muted/50 select-none whitespace-nowrap"
                 >
-                  {format(col.date, 'EEE d')}
+                  <span className="flex items-center justify-center w-full select-none">
+                    {format(col.date, 'EEE d')}
+                  </span>
                 </th>
               )
             }
@@ -495,10 +518,12 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                 role="columnheader"
                 scope="col"
                 onClick={interactive ? () => void toggleColumn(dateIdx) : undefined}
-                className={`p-2 text-sm font-medium select-none ${interactive ? 'cursor-pointer hover:bg-raised' : ''}`}
+                className={`w-28 p-2 text-sm font-medium select-none whitespace-nowrap ${interactive ? 'cursor-pointer hover:bg-raised' : ''}`}
                 title={interactive ? 'Click to toggle this entire column' : undefined}
               >
-                <span className={interactive ? 'inline-block bg-raised border border-line rounded-[8px] px-1.5 py-0.5 active:bg-primary/20 select-none' : undefined}>
+                <span
+                  className={`flex items-center justify-center w-full select-none ${interactive ? 'bg-raised border border-line rounded-[8px] px-1.5 py-0.5 active:bg-primary/20' : ''}`}
+                >
                   {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
                 </span>
               </th>
@@ -537,7 +562,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               const dateIdx = col.eventDateIdx
               const slotIdx = dateIdx * spd + timeIdx
               const rawMine = myDisplayBits[slotIdx]
-              const mine = applyLens(rawMine)
+              const mine = renderLens(rawMine)
               const bg = mineColor(mine, notAvailableMode)
               return (
                 <td
