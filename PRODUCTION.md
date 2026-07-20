@@ -609,4 +609,63 @@ Full spec: `docs/superpowers/specs/2026-07-19-v1.5-calendar-grid-views-design.md
 
 - **Domain name** — to be decided before P5. Until then, the Hosting default URL (`schedule2gather-prod.web.app` or similar) is the production URL.
 
+---
+
+## 15. Feature Status — Disabled / Not Yet Enabled
+
+Both features below are fully built and merged, but intentionally not exposed in the
+live UI. Nothing needs reverting to bring either back — just re-wire the entry point
+and, in each case, provision one external credential.
+
+### Bug report / feature suggestion → GitHub issue
+
+- **State:** disabled. The 💬 entry point in `AppHeader.tsx` was removed (2026-07-20).
+- **Code still present, untouched:** `functions/src/submitFeedback.ts`,
+  `src/services/feedbackService.ts`, `src/components/FeedbackModal.tsx`.
+- **Why disabled:** the `submitFeedback` Cloud Function needs a `GITHUB_TOKEN` secret
+  to open issues via the GitHub REST API. Its export is commented out in
+  `functions/src/index.ts` (`// export { submitFeedback } from './submitFeedback'`)
+  because Firebase's codebase analysis resolves every secret referenced anywhere in
+  the functions codebase before it will deploy *any* function — an unset secret blocks
+  the whole deploy, not just this one function.
+- **To re-enable:**
+  1. Create a GitHub fine-grained PAT scoped to only this repo, **Issues: Read and
+     write** permission, nothing else.
+  2. `firebase functions:secrets:set GITHUB_TOKEN` (paste the token when prompted).
+  3. Uncomment the `submitFeedback` export in `functions/src/index.ts`.
+  4. `firebase deploy --only functions:submitFeedback`.
+  5. Re-add the 💬 button + `showFeedback` state + `FeedbackModal` render to
+     `AppHeader.tsx` (see git history around 2026-07-20 for the exact diff).
+
+### Google Maps address search for the location field
+
+- **State:** disabled (2026-07-20). The location field is plain text only, in both
+  `CreateEventForm.tsx` and `FinalizeSheet.tsx` — no mode toggle, no autocomplete, and
+  it is never rendered as a clickable link anywhere (`EventPage.tsx` always shows it
+  as plain text).
+- **Code still present, unused:** `src/components/LocationInput.tsx` (the Text/Search
+  toggle + autocomplete UI), `src/services/placesService.ts` (wraps the Places API's
+  `AutocompleteSuggestion` + `Place.fetchFields`), `src/lib/googleMaps.ts`
+  (`googleMapsSearchUrl` helper).
+- **Backend fields left in place (harmless, always absent/false going forward):**
+  `EventDoc.locationIsMapLink` / `CreateEventInput.locationIsMapLink` in
+  `src/services/eventService.ts`, `functions/src/lib/validate.ts`, and the
+  `createEvent` handler in `functions/src/index.ts`; `finalizeEvent()`'s 4th
+  parameter. No schema migration needed to re-enable — the field already round-trips.
+- **Why disabled:** needs a `VITE_GOOGLE_MAPS_API_KEY` (Places API (New), already
+  enabled on the GCP project) restricted by HTTP referrer to the app's domain(s).
+  Without it, `LocationInput`'s Search mode degraded gracefully to an inline "not set
+  up yet" message rather than crashing — but the whole mode was removed rather than
+  left half-working.
+- **To re-enable:**
+  1. Create the API key in Google Cloud Console for the `schedule2gather` project,
+     restrict by HTTP referrer (`localhost`, the production domain).
+  2. Add `VITE_GOOGLE_MAPS_API_KEY=<key>` to `.env` (local) and to wherever the
+     production build sources its env vars.
+  3. In `CreateEventForm.tsx` and `FinalizeSheet.tsx`, swap the plain location
+     `<input>`/`TextField` back for `<LocationInput value={...} onChange={...}
+     isMapLink={...} onIsMapLinkChange={...} />` (see git history around 2026-07-20,
+     commit `8502107`, for the exact wiring).
+  4. In `EventPage.tsx`, restore the `event.locationIsMapLink ? <a href={googleMapsSearchUrl(...)}>...</a> : <span>...</span>` conditional for the header location line.
+
 (Earlier open questions on auth approach, heatmap palette default, and participant cap were resolved during implementation planning — see §5 for auth, §12 P5 for palette and cap.)

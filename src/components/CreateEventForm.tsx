@@ -20,7 +20,6 @@ import { clampTimeRange } from '@/lib/timeRange'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
-import LocationInput from '@/components/LocationInput'
 import ScrollSelect from '@/components/ui/ScrollSelect'
 import SegmentedControl from '@/components/ui/SegmentedControl'
 import Switch from '@/components/ui/Switch'
@@ -50,7 +49,6 @@ export default function CreateEventForm() {
 
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
-  const [locationIsMapLink, setLocationIsMapLink] = useState(false)
   const [startHour, setStartHour] = useState(9)
   const [endHour, setEndHour] = useState(21)
   const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(30)
@@ -150,7 +148,6 @@ export default function CreateEventForm() {
         timezone,
         datesOnly,
         location: location.trim() || undefined,
-        locationIsMapLink,
       })
       navigate(`/e/${slug}`)
     } catch (err: unknown) {
@@ -256,11 +253,13 @@ export default function CreateEventForm() {
         placeholder="Pizza night, team sync, book club…"
       />
 
-      <LocationInput
+      <TextField
+        id="event-location"
+        label="📍 Location (optional)"
         value={location}
-        onChange={setLocation}
-        isMapLink={locationIsMapLink}
-        onIsMapLinkChange={setLocationIsMapLink}
+        onChange={(e) => setLocation(e.target.value)}
+        placeholder="Where's it happening? (optional)"
+        maxLength={200}
       />
 
       <Card>

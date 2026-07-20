@@ -7,7 +7,6 @@ import { slotsPerDay } from '@/lib/slots'
 import { formatSlotDateLabel, formatSlotTimeLabel } from '@/lib/timezoneSlots'
 import BottomSheet from '@/components/ui/BottomSheet'
 import Button from '@/components/ui/Button'
-import LocationInput from '@/components/LocationInput'
 
 interface FinalizeSheetProps {
   slug: string
@@ -23,7 +22,6 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
   const [customStart, setCustomStart] = useState(0)
   const [customSlots, setCustomSlots] = useState(2)
   const [location, setLocation] = useState(event?.location ?? '')
-  const [locationIsMapLink, setLocationIsMapLink] = useState(event?.locationIsMapLink ?? false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -71,7 +69,7 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
     setSaving(true)
     setError(null)
     try {
-      await finalizeEvent(slug, w, location.trim() || undefined, locationIsMapLink)
+      await finalizeEvent(slug, w, location.trim() || undefined)
       onClose()
     } catch {
       setError("Couldn't save — try again")
@@ -143,12 +141,20 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
             )}
           </div>
         )}
-        <LocationInput
-          value={location}
-          onChange={setLocation}
-          isMapLink={locationIsMapLink}
-          onIsMapLinkChange={setLocationIsMapLink}
-        />
+        <div>
+          <label htmlFor="finalize-location" className="block text-xs font-bold text-ink-muted mb-1">
+            📍 Location (optional)
+          </label>
+          <input
+            id="finalize-location"
+            type="text"
+            maxLength={200}
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="Where's it happening? (optional)"
+            className={selectClass}
+          />
+        </div>
         {error && <p className="text-sm text-danger">{error}</p>}
         <Button size="lg" onClick={() => void handleFinish()} disabled={saving || resolveWindow() === null} className="mt-2">
           {saving ? 'Saving…' : '🏁 Finish vote'}
