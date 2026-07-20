@@ -263,18 +263,6 @@ export default function CreateEventForm() {
             setRangeDraft(undefined)
           }}
         />
-        <div className="mt-2 mb-3">
-          <span className="block text-xs font-bold text-ink-muted mb-1">Ask voters for</span>
-          <SegmentedControl
-            className="max-w-[280px]"
-            options={[
-              { value: 'times', label: '⏰ Specific times', title: 'Voters paint the hours they’re free' },
-              { value: 'dates', label: '📅 Dates only', title: 'Voters just mark which days they’re free — no hourly grid' },
-            ]}
-            value={datesOnly ? 'dates' : 'times'}
-            onChange={(v) => setDatesOnly(v === 'dates')}
-          />
-        </div>
         {/* One quick-select row per VISIBLE month, aligned above its month column. */}
         <div className={`mb-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
           {visibleMonths.map((m) => (
@@ -331,6 +319,22 @@ export default function CreateEventForm() {
             Tap a start date, then an end date — the whole span is added to your selection.
           </p>
         )}
+        <div className="flex justify-center mt-3">
+          <Button
+            type="button"
+            variant={datesOnly ? 'primary' : 'secondary'}
+            size="sm"
+            aria-pressed={datesOnly}
+            title={
+              datesOnly
+                ? 'Voters mark which days they’re free — no hourly grid. Tap to bring back time selection.'
+                : 'Skip hourly time selection — voters just mark which days work'
+            }
+            onClick={() => setDatesOnly((v) => !v)}
+          >
+            📅 Date only
+          </Button>
+        </div>
       </Card>
 
       {selectedDates.length > 0 && (
@@ -376,15 +380,19 @@ export default function CreateEventForm() {
         <button
           type="button"
           onClick={() => setAdvancedOpen((v) => !v)}
+          disabled={datesOnly}
           aria-expanded={advancedOpen}
-          className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-bold text-ink-muted"
+          title={datesOnly ? 'Not needed for date-only events' : undefined}
+          className={`w-full flex items-center justify-between px-4 py-2.5 text-sm font-bold text-ink-muted ${
+            datesOnly ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
         >
           <span>⚙ {summaryLabel}</span>
           <span aria-hidden="true">{advancedOpen ? '▴' : '▾'}</span>
         </button>
-        {advancedOpen && (
+        {advancedOpen && !datesOnly && (
           <div className="px-4 pb-4 space-y-3">
-            {!datesOnly && (
+            {
               isMobile ? (
                 <div>
                   <div className="grid grid-cols-2 gap-3">
@@ -444,21 +452,19 @@ export default function CreateEventForm() {
                   )}
                 </div>
               )
-            )}
-            {!datesOnly && (
-              <div>
-                <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
-                <SegmentedControl
-                  options={[
-                    { value: '15', label: '15 min' },
-                    { value: '30', label: '30 min' },
-                    { value: '60', label: '1 hour' },
-                  ]}
-                  value={String(slotMinutes) as '15' | '30' | '60'}
-                  onChange={(v) => setSlotMinutes(Number(v) as 15 | 30 | 60)}
-                />
-              </div>
-            )}
+            }
+            <div>
+              <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
+              <SegmentedControl
+                options={[
+                  { value: '15', label: '15 min' },
+                  { value: '30', label: '30 min' },
+                  { value: '60', label: '1 hour' },
+                ]}
+                value={String(slotMinutes) as '15' | '30' | '60'}
+                onChange={(v) => setSlotMinutes(Number(v) as 15 | 30 | 60)}
+              />
+            </div>
             <div>
               <label htmlFor="event-tz" className="block text-xs font-bold text-ink-muted mb-1">Time zone</label>
               <div className="flex gap-2">
