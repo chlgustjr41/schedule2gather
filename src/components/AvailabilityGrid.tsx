@@ -68,15 +68,15 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   })
   const [eventDaysOnly, setEventDaysOnly] = useState(true)
   const [dateOnlyView, setDateOnlyView] = useState<'all' | 'week' | 'month'>(() => (isMobile ? 'week' : 'all'))
-  // "Not available" paint mode: painting marks specific slots busy (shown in
-  // the danger color) instead of available. Toggling the mode itself never
-  // writes anything. busySlots tracks which slot indices have been painted
-  // busy during the CURRENT session (reset every time the mode is entered or
-  // left) — display for cells not in this set always falls back to blank,
-  // regardless of any other cell's state, so painting one slot never ripples
-  // into how any other slot renders. See setPaintedForSlots below.
+  // "Not available" paint mode: while on, painting marks busy times (shown in
+  // the danger color instead of the mine color) rather than free ones. Every
+  // toggle of this mode (on or off) inverts the CURRENT PAGE's real bits —
+  // see invertCurrentPageIfNeeded — but only if the page actually has
+  // anything colored; an all-blank page has nothing to invert and stays
+  // blank. Because the underlying data itself is what's inverted (not just
+  // the rendering), individual clicks during the session need no special
+  // handling — each one only ever touches the one cell it's applied to.
   const [notAvailableMode, setNotAvailableMode] = useState(false)
-  const [busySlots, setBusySlots] = useState<Set<number>>(() => new Set())
 
   const changeZoom = (dir: 1 | -1) =>
     setZoom((z) => {
@@ -268,69 +268,91 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
 
   const myDisplayBits = draftBits ?? myCommittedBits
 
-  // Paints (or unpaints) exactly the given slots, translated for whichever
-  // mode is active, and writes the real availability bit immediately — no
-  // other slot is ever touched. Normal mode: painted -> available (true).
-  // "Not available" mode: painted -> busy (false), tracked in busySlots so
-  // rendering can tell "explicitly marked busy" apart from "never touched"
-  // even though both currently read as the same false bit.
-  const setPaintedForSlots = async (slotIdxs: number[], painted: boolean) => {
+  const toggleColumn = async (dateIdx: number) => {
     if (!myCommittedBits) return
-    pushHistory(myParticipant?.availability ?? '')
-    if (notAvailableMode) {
-      setBusySlots((prev) => {
-        const next = new Set(prev)
-        for (const idx of slotIdxs) {
-          if (painted) next.add(idx)
-          else next.delete(idx)
-        }
-        return next
-      })
-      const next = [...myCommittedBits]
-      for (const idx of slotIdxs) next[idx] = !painted
-      await updateMyAvailability(pack(next))
-      return
+    const startIdx = dateIdx * spd
+    const endIdx = startIdx + spd - 1
+    let anyOff = false
+    for (let i = startIdx; i <= endIdx; i++) {
+      if (!myCommittedBits[i]) {
+        anyOff = true
+        break
+      }
     }
+    const value = anyOff
     const next = [...myCommittedBits]
-    for (const idx of slotIdxs) next[idx] = painted
+    for (let i = startIdx; i <= endIdx; i++) next[i] = value
+    pushHistory(myParticipant?.availability ?? '')
     await updateMyAvailability(pack(next))
   }
 
-  const isPaintedSlot = (idx: number): boolean =>
-    notAvailableMode ? busySlots.has(idx) : (myCommittedBits?.[idx] ?? false)
-
-  const toggleColumn = async (dateIdx: number) => {
-    const startIdx = dateIdx * spd
-    const idxs = Array.from({ length: spd }, (_, i) => startIdx + i)
-    const anyUnpainted = idxs.some((i) => !isPaintedSlot(i))
-    await setPaintedForSlots(idxs, anyUnpainted)
-  }
-
   const toggleRow = async (timeIdx: number) => {
-    if (!event) return
-    const idxs = Array.from({ length: event.dates.length }, (_, d) => d * spd + timeIdx)
-    const anyUnpainted = idxs.some((i) => !isPaintedSlot(i))
-    await setPaintedForSlots(idxs, anyUnpainted)
+    if (!myCommittedBits || !event) return
+    let anyOff = false
+    for (let d = 0; d < event.dates.length; d++) {
+      if (!myCommittedBits[d * spd + timeIdx]) {
+        anyOff = true
+        break
+      }
+    }
+    const value = anyOff
+    const next = [...myCommittedBits]
+    for (let d = 0; d < event.dates.length; d++) next[d * spd + timeIdx] = value
+    pushHistory(myParticipant?.availability ?? '')
+    await updateMyAvailability(pack(next))
   }
 
-  // "Mark all" / "Clear all" paint the whole event in whichever mode's color
-  // — green/available normally, red/busy in "not available" mode.
   const markAllPainted = async () => {
-    if (!event) return
-    await setPaintedForSlots(Array.from({ length: event.slotCount }, (_, i) => i), true)
+    if (!event || !myCommittedBits) return
+    const next = new Array(event.slotCount).fill(true)
+    pushHistory(myParticipant?.availability ?? '')
+    await updateMyAvailability(pack(next))
   }
 
   const clearAllPainted = async () => {
-    if (!event) return
-    await setPaintedForSlots(Array.from({ length: event.slotCount }, (_, i) => i), false)
+    if (!event || !myCommittedBits) return
+    const next = new Array(event.slotCount).fill(false)
+    pushHistory(myParticipant?.availability ?? '')
+    await updateMyAvailability(pack(next))
   }
 
-  // Always clears busySlots — entering starts from a blank slate and leaving
-  // (via the toggle button OR page navigation) discards this session's local
-  // bookkeeping. Toggling itself never writes availability.
-  const resetNotAvailableMode = (next: boolean) => {
-    setBusySlots(new Set())
-    setNotAvailableMode(next)
+  // Slot indices belonging to the CURRENTLY VISIBLE page only (real event
+  // dates, not the greyed out-of-range columns) — inverting on toggle only
+  // ever touches what's on screen, never other pages' data.
+  const currentPageSlotIndices = (): number[] =>
+    visibleColumns
+      .filter((c) => c.eventDateIdx !== -1)
+      .flatMap((c) => {
+        const start = c.eventDateIdx * spd
+        return Array.from({ length: spd }, (_, i) => start + i)
+      })
+
+  // Inverts the current page's slots and commits — but only if at least one
+  // of them is currently colored. An all-blank page has nothing meaningful
+  // to invert, so it's left blank rather than lighting up entirely.
+  const invertCurrentPageIfNeeded = async () => {
+    if (!myCommittedBits) return
+    const pageSlotIdxs = currentPageSlotIndices()
+    const hasAnyColored = pageSlotIdxs.some((idx) => myCommittedBits[idx])
+    if (!hasAnyColored) return
+    const next = [...myCommittedBits]
+    for (const idx of pageSlotIdxs) next[idx] = !next[idx]
+    pushHistory(myParticipant?.availability ?? '')
+    await updateMyAvailability(pack(next))
+  }
+
+  const toggleNotAvailableMode = async () => {
+    setNotAvailableMode((v) => !v)
+    await invertCurrentPageIfNeeded()
+  }
+
+  // Leaving the page while the mode is on would otherwise leave data on the
+  // page you're navigating away from sitting in "busy" semantics — treat
+  // navigation as an implicit exit so it's always correctly inverted back.
+  const exitNotAvailableModeForNavigation = async () => {
+    if (!notAvailableMode) return
+    setNotAvailableMode(false)
+    await invertCurrentPageIfNeeded()
   }
 
   const triggerHaptic = () => {
@@ -343,26 +365,17 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     }
   }
 
-  // While painting in "not available" mode, the drag mechanic operates on a
-  // synthetic "is this slot already marked busy this session" array instead
-  // of the real committed bits — so paint-by-example (which flips whichever
-  // state the pressed cell starts in) adds/removes busySlots membership
-  // instead of real availability directly. Translated to real bits on commit.
-  const paintSourceBits = notAvailableMode
-    ? Array.from({ length: event.slotCount }, (_, i) => busySlots.has(i))
-    : myCommittedBits
-
   const handlePointerDown = (slotIdx: number) => (e: React.PointerEvent) => {
     if (e.pointerType === 'touch' && !effectivePaintMode) return
     e.preventDefault()
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-    startPaint(slotIdx, paintSourceBits)
+    startPaint(slotIdx, myCommittedBits)
     triggerHaptic()
   }
 
   const handlePointerEnter = (slotIdx: number) => () => {
     if (draftBits) {
-      dragTo(slotIdx, paintSourceBits)
+      dragTo(slotIdx, myCommittedBits)
     } else {
       setTooltipSlot(slotIdx)
     }
@@ -384,35 +397,16 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     if (Number.isNaN(slotIdx)) return
     // Capture visited-state BEFORE dragTo (which may add slotIdx).
     const wasNew = !usePaintStore.getState().visited.has(slotIdx)
-    dragTo(slotIdx, paintSourceBits)
+    dragTo(slotIdx, myCommittedBits)
     if (wasNew) triggerHaptic()
   }
 
   const handlePointerUp = async () => {
-    const visited = [...usePaintStore.getState().visited]
     const finalBits = commitPaint()
-    if (!finalBits || !myCommittedBits) return
-    pushHistory(myParticipant?.availability ?? '')
-    if (notAvailableMode) {
-      // finalBits here is in "busy session" space (true = marked busy this
-      // drag) for exactly the touched slots — translate just those to real
-      // availability; every other slot is left completely untouched.
-      const nextBusy = new Set(busySlots)
-      const nextReal = [...myCommittedBits]
-      for (const idx of visited) {
-        if (finalBits[idx]) {
-          nextBusy.add(idx)
-          nextReal[idx] = false
-        } else {
-          nextBusy.delete(idx)
-          nextReal[idx] = true
-        }
-      }
-      setBusySlots(nextBusy)
-      await updateMyAvailability(pack(nextReal))
-      return
+    if (finalBits) {
+      pushHistory(myParticipant?.availability ?? '')
+      await updateMyAvailability(pack(finalBits))
     }
-    await updateMyAvailability(pack(finalBits))
   }
 
   const focusSlotCell = (slotIdx: number) => {
@@ -422,7 +416,11 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   }
 
   const toggleSingleSlot = async (slotIdx: number) => {
-    await setPaintedForSlots([slotIdx], !isPaintedSlot(slotIdx))
+    if (!myCommittedBits) return
+    pushHistory(myParticipant?.availability ?? '')
+    const next = [...myCommittedBits]
+    next[slotIdx] = !next[slotIdx]
+    await updateMyAvailability(pack(next))
   }
 
   const handleGridKeyDown = (e: React.KeyboardEvent<HTMLTableElement>) => {
@@ -569,14 +567,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               }
               const dateIdx = col.eventDateIdx
               const slotIdx = dateIdx * spd + timeIdx
-              const rawMine = myDisplayBits[slotIdx]
-              // While in "not available" mode, only slots explicitly touched
-              // this session (busySlots, or the live drag draft) ever render
-              // as painted — every other slot stays blank regardless of what
-              // else has been painted, so one click never ripples elsewhere.
-              const mine = notAvailableMode
-                ? (draftBits ? draftBits[slotIdx] : busySlots.has(slotIdx))
-                : rawMine
+              const mine = myDisplayBits[slotIdx]
               const bg = mineColor(mine, notAvailableMode)
               return (
                 <td
@@ -584,7 +575,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                   role="gridcell"
                   tabIndex={interactive && slotIdx === focusedSlot ? 0 : -1}
                   aria-selected={mine}
-                  aria-label={`${formatSlotDateLabel(event, dateIdx, viewerTimezone)} ${formatSlotTimeLabel(event, timeIdx, viewerTimezone)} — ${rawMine ? 'available' : 'unavailable'}`}
+                  aria-label={`${formatSlotDateLabel(event, dateIdx, viewerTimezone)} ${formatSlotTimeLabel(event, timeIdx, viewerTimezone)} — ${mine ? 'available' : 'unavailable'}`}
                   data-slot-idx={interactive ? slotIdx : undefined}
                   onFocus={interactive ? () => setFocusedSlot(slotIdx) : undefined}
                   onPointerDown={interactive ? handlePointerDown(slotIdx) : undefined}
@@ -735,7 +726,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           }
           value={viewSize}
           onChange={(v) => {
-            resetNotAvailableMode(false)
+            void exitNotAvailableModeForNavigation()
             setViewSize(v)
             setPageIdx(0)
           }}
@@ -761,7 +752,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           size="sm"
           type="button"
           aria-pressed={notAvailableMode}
-          onClick={() => resetNotAvailableMode(!notAvailableMode)}
+          onClick={() => void toggleNotAvailableMode()}
           title={
             notAvailableMode
               ? 'Now painting busy times — tap to flip back to your real availability'
@@ -857,7 +848,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
             size="sm"
             type="button"
             onClick={() => {
-              resetNotAvailableMode(false)
+              void exitNotAvailableModeForNavigation()
               setPageIdx((p) => Math.max(0, p - 1))
             }}
             disabled={pageIdx === 0}
@@ -877,7 +868,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
             size="sm"
             type="button"
             onClick={() => {
-              resetNotAvailableMode(false)
+              void exitNotAvailableModeForNavigation()
               setPageIdx((p) => Math.min(totalPages - 1, p + 1))
             }}
             disabled={pageIdx >= totalPages - 1}
