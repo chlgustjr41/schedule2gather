@@ -252,15 +252,19 @@ export default function DashboardPage() {
                       onClick={() => navigate(`/e/${ev.slug}`)}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(ev.slug)}
-                          onChange={() => toggleSelect(ev.slug)}
+                        <label
+                          className="flex items-center justify-center w-11 h-11 -m-2 shrink-0 cursor-pointer rounded-[10px] hover:bg-canvas transition"
                           onClick={(e) => e.stopPropagation()}
-                          aria-label={`Select ${ev.name} for bulk actions`}
                           title="Select for bulk actions"
-                          className="mt-1 mr-1 w-4 h-4 accent-[var(--s2g-primary)] shrink-0"
-                        />
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected.has(ev.slug)}
+                            onChange={() => toggleSelect(ev.slug)}
+                            aria-label={`Select ${ev.name} for bulk actions`}
+                            className="w-4 h-4 accent-[var(--s2g-primary)]"
+                          />
+                        </label>
                         <div className="min-w-0">
                           <div className="font-extrabold break-words">
                             {ev.name}{' '}
