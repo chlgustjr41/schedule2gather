@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DayPicker, type DateRange } from 'react-day-picker'
+import { DayPicker, type DateRange, type WeekNumberProps } from 'react-day-picker'
 import 'react-day-picker/style.css'
 import {
   addMonths,
@@ -14,7 +14,7 @@ import {
 import { createEvent } from '@/services/eventService'
 import { useAuthStore } from '@/stores/authStore'
 import { COMMON_TIMEZONES, detectTimezone, formatTimezoneLabel } from '@/lib/timezones'
-import { mergeRangeIntoDates } from '@/lib/dateRange'
+import { mergeRangeIntoDates, toggleDays } from '@/lib/dateRange'
 import { clampTimeRange } from '@/lib/timeRange'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Button from '@/components/ui/Button'
@@ -106,6 +106,20 @@ export default function CreateEventForm() {
     })
   }
 
+  // Toggle every occurrence of a given weekday (0=Sun..6=Sat) within `month`.
+  const toggleWeekday = (month: Date, weekday: number) => {
+    const candidates = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) }).filter(
+      (day) => getDay(day) === weekday && day >= today,
+    )
+    setSelectedDates((prev) => toggleDays(prev, candidates))
+  }
+
+  // Toggle every day in a calendar week (from a week-number cell click).
+  const toggleWeek = (weekDates: Date[]) => {
+    const candidates = weekDates.filter((day) => day >= today)
+    setSelectedDates((prev) => toggleDays(prev, candidates))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -153,6 +167,45 @@ export default function CreateEventForm() {
     </div>
   )
 
+  // react-day-picker v9's `components.Weekday` only receives generic <th> attrs
+  // (aria-label/className/style/scope) — no weekday index or month context is
+  // exposed (verified in node_modules/react-day-picker/dist/esm/DayPicker.js,
+  // where Weekday is invoked with only { "aria-label", className, key, style,
+  // scope } and formatted text as children). So instead of overriding Weekday,
+  // render a chip row of 7 weekday toggle buttons above each month.
+  const weekdayChips = (month: Date) => (
+    <div key={`chips-${month.getTime()}`} className="grid grid-cols-7 gap-[2px] max-w-[252px] mx-auto mb-1">
+      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => toggleWeekday(month, i)}
+          className="text-[10px] font-extrabold text-ink-muted bg-raised border border-line rounded-[6px] py-0.5 active:bg-primary/20"
+          aria-label={`Toggle all ${
+            ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'][i]
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+
+  // v9's `onWeekNumberClick` prop is declared in the types (deprecated, typed
+  // `any`) but is never read anywhere in DayPicker.js — it's dead. The
+  // supported v9 hook is overriding the `WeekNumber` component, which DOES
+  // receive `week: CalendarWeek` (with `.days: CalendarDay[]`, each carrying
+  // `.date`) — confirmed in node_modules/react-day-picker/dist/esm/classes/CalendarWeek.d.ts
+  // and the `showWeekNumber && <components.WeekNumber week={week} .../>` call site.
+  const WeekNumberCell = ({ week, ...thProps }: WeekNumberProps) => (
+    <th
+      {...thProps}
+      onClick={() => toggleWeek(week.days.map((d) => d.date))}
+      role="button"
+      aria-label={`Toggle all days in week ${week.weekNumber}`}
+    />
+  )
+
   const summaryLabel = `${formatHour(startHour)} – ${formatHour(endHour)} · ${slotMinutes} min · ${
     timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone
   }`
@@ -187,51 +240,14 @@ export default function CreateEventForm() {
           }}
         />
         {/* One quick-select row per VISIBLE month, aligned above its month column. */}
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <div className={`flex-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
-            {visibleMonths.map((m) => (
-              <div key={m.getTime()} className="flex justify-center">
-                {renderQuickRow(m)}
-              </div>
-            ))}
-          </div>
-          <div className="shrink-0 text-xs text-ink-muted text-right">
-            {selectedDates.length} selected
-            {selectedDates.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedDates([])
-                  setRangeDraft(undefined)
-                }}
-                className="ml-2 underline hover:text-ink"
-              >
-                Clear all
-              </button>
-            )}
-          </div>
+        <div className={`mb-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
+          {visibleMonths.map((m) => (
+            <div key={m.getTime()} className="flex flex-col items-center">
+              {renderQuickRow(m)}
+              {weekdayChips(m)}
+            </div>
+          ))}
         </div>
-        {selectedDates.length > 0 && (
-          <ul className="mb-2 max-h-40 overflow-y-auto divide-y divide-line rounded-[12px] border border-line bg-raised/40">
-            {[...selectedDates]
-              .sort((a, b) => a.getTime() - b.getTime())
-              .map((d) => (
-                <li key={d.toDateString()} className="flex items-center justify-between px-3 py-1.5 text-sm">
-                  <span className="font-bold">{format(d, 'EEE, MMM d')}</span>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${format(d, 'MMM d')}`}
-                    onClick={() =>
-                      setSelectedDates((prev) => prev.filter((x) => x.toDateString() !== d.toDateString()))
-                    }
-                    className="text-ink-muted hover:text-danger px-1"
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-          </ul>
-        )}
         <div className="rdp-side-by-side">
           {pickMode === 'days' ? (
             <DayPicker
@@ -243,6 +259,8 @@ export default function CreateEventForm() {
               onSelect={(dates) => setSelectedDates(dates ?? [])}
               disabled={{ before: today }}
               startMonth={today}
+              showWeekNumber
+              components={{ WeekNumber: WeekNumberCell }}
             />
           ) : (
             <DayPicker
@@ -268,6 +286,8 @@ export default function CreateEventForm() {
               }}
               disabled={{ before: today }}
               startMonth={today}
+              showWeekNumber
+              components={{ WeekNumber: WeekNumberCell }}
             />
           )}
         </div>
@@ -277,6 +297,45 @@ export default function CreateEventForm() {
           </p>
         )}
       </Card>
+
+      {selectedDates.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-ink-muted">
+              Selected dates · {selectedDates.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedDates([])
+                setRangeDraft(undefined)
+              }}
+              className="text-xs text-ink-muted underline hover:text-ink"
+            >
+              Clear all
+            </button>
+          </div>
+          <ul className="max-h-40 overflow-y-auto divide-y divide-line">
+            {[...selectedDates]
+              .sort((a, b) => a.getTime() - b.getTime())
+              .map((d) => (
+                <li key={d.toDateString()} className="flex items-center justify-between px-1 py-1.5 text-sm">
+                  <span className="font-bold">{format(d, 'EEE, MMM d')}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${format(d, 'MMM d')}`}
+                    onClick={() =>
+                      setSelectedDates((prev) => prev.filter((x) => x.toDateString() !== d.toDateString()))
+                    }
+                    className="text-ink-muted hover:text-danger px-1"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </Card>
+      )}
 
       <div className="bg-line/40 rounded-[12px]">
         <button

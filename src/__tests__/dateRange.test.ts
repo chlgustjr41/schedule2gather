@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeRangeIntoDates } from '@/lib/dateRange'
+import { mergeRangeIntoDates, toggleDays } from '@/lib/dateRange'
 
 const d = (s: string) => new Date(s + 'T00:00:00')
 
@@ -25,5 +25,24 @@ describe('mergeRangeIntoDates', () => {
     const existing = [d('2026-07-21'), d('2026-07-30')]
     const out = mergeRangeIntoDates(existing, d('2026-07-20'), d('2026-07-22'), today)
     expect(out.map((x) => x.getDate())).toEqual([21, 30, 20, 22])
+  })
+})
+
+describe('toggleDays', () => {
+  it('adds candidates that are missing', () => {
+    const out = toggleDays([d('2026-07-20')], [d('2026-07-20'), d('2026-07-27')])
+    expect(out.map((x) => x.getDate()).sort((a, b) => a - b)).toEqual([20, 27])
+  })
+  it('removes all candidates when every one is present', () => {
+    const out = toggleDays([d('2026-07-20'), d('2026-07-27'), d('2026-07-21')], [d('2026-07-20'), d('2026-07-27')])
+    expect(out.map((x) => x.getDate())).toEqual([21])
+  })
+  it('no-ops on empty candidates', () => {
+    const existing = [d('2026-07-20')]
+    expect(toggleDays(existing, [])).toEqual(existing)
+  })
+  it('dedupes when adding', () => {
+    const out = toggleDays([], [d('2026-07-20'), d('2026-07-20')])
+    expect(out).toHaveLength(1)
   })
 })
