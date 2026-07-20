@@ -8,6 +8,7 @@ import {
   endOfMonth,
   format,
   getDay,
+  isSameMonth,
   startOfDay,
   startOfMonth,
 } from 'date-fns'
@@ -19,6 +20,7 @@ import { clampTimeRange } from '@/lib/timeRange'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
+import ScrollSelect from '@/components/ui/ScrollSelect'
 import SegmentedControl from '@/components/ui/SegmentedControl'
 import TextField from '@/components/ui/TextField'
 import WheelPicker from '@/components/ui/WheelPicker'
@@ -55,6 +57,7 @@ export default function CreateEventForm() {
   const [rangeHint, setRangeHint] = useState(false)
   const [pickMode, setPickMode] = useState<'days' | 'range'>('days')
   const [rangeDraft, setRangeDraft] = useState<DateRange | undefined>(undefined)
+  const [datesOnly, setDatesOnly] = useState(false)
 
   const today = useMemo(() => startOfDay(new Date()), [])
   // Controlled calendar month so the per-month quick-select rows track whatever
@@ -128,7 +131,7 @@ export default function CreateEventForm() {
       if (selectedDates.length === 0) {
         throw new Error('Pick at least one date')
       }
-      if (startHour >= endHour) {
+      if (!datesOnly && startHour >= endHour) {
         throw new Error('Latest must be after earliest')
       }
       const dates = [...selectedDates]
@@ -138,9 +141,10 @@ export default function CreateEventForm() {
         name,
         mode: 'specific_dates',
         dates,
-        timeRange: { start: startHour, end: endHour },
-        slotMinutes,
+        timeRange: datesOnly ? { start: 0, end: 24 } : { start: startHour, end: endHour },
+        slotMinutes: datesOnly ? 60 : slotMinutes,
         timezone,
+        datesOnly,
       })
       navigate(`/e/${slug}`)
     } catch (err: unknown) {
@@ -152,7 +156,7 @@ export default function CreateEventForm() {
   }
 
   const renderQuickRow = (anchor: Date) => (
-    <div key={anchor.getTime()} className="flex items-center gap-2 text-xs">
+    <div key={anchor.getTime()} className="flex items-center gap-2 text-xs flex-wrap">
       <span className="text-ink-muted w-16 shrink-0">{format(anchor, 'MMMM')}:</span>
       {(['all', 'weekdays', 'weekends'] as const).map((cat) => (
         <button
@@ -164,31 +168,44 @@ export default function CreateEventForm() {
           {cat}
         </button>
       ))}
+      {selectedDates.some((d) => isSameMonth(d, anchor)) && (
+        <button
+          type="button"
+          onClick={() => setSelectedDates((prev) => prev.filter((d) => !isSameMonth(d, anchor)))}
+          className="text-danger font-bold hover:underline"
+        >
+          Clear
+        </button>
+      )}
     </div>
   )
 
-  // react-day-picker v9's `components.Weekday` only receives generic <th> attrs
-  // (aria-label/className/style/scope) — no weekday index or month context is
-  // exposed (verified in node_modules/react-day-picker/dist/esm/DayPicker.js,
-  // where Weekday is invoked with only { "aria-label", className, key, style,
-  // scope } and formatted text as children). So instead of overriding Weekday,
-  // render a chip row of 7 weekday toggle buttons above each month.
-  const weekdayChips = (month: Date) => (
-    <div key={`chips-${month.getTime()}`} className="grid grid-cols-7 gap-[2px] max-w-[252px] mx-auto mb-1">
-      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, i) => (
-        <button
-          key={i}
-          type="button"
-          onClick={() => toggleWeekday(month, i)}
-          className="text-[10px] font-extrabold text-ink-muted bg-raised border border-line rounded-[6px] py-0.5 active:bg-primary/20"
-          aria-label={`Toggle all ${
-            ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'][i]
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+  // Clickable Mon–Sun titles inside the calendar itself. v9 passes no date
+  // context to `components.Weekday`, so the column (position among header
+  // cells, offset by the week-number column) and the month (position among
+  // rendered .rdp-month blocks) are derived from the DOM at click time.
+  const WeekdayHeader = (props: React.ThHTMLAttributes<HTMLTableCellElement>) => (
+    <th {...props}>
+      <button
+        type="button"
+        title="Select every one of this weekday in the month"
+        aria-label={`Toggle this weekday for the whole month`}
+        className="w-full min-w-[34px] text-[11px] font-extrabold text-ink-muted bg-raised border border-line rounded-[6px] py-1 hover:bg-primary/15 active:bg-primary/25"
+        onClick={(e) => {
+          const th = e.currentTarget.closest('th')
+          const row = th?.parentElement
+          const monthEl = th?.closest('.rdp-month')
+          if (!th || !row || !monthEl) return
+          const monthIdx = [...document.querySelectorAll('.rdp-month')].indexOf(monthEl)
+          const cells = [...row.children]
+          const col = cells.indexOf(th) - (cells.length - 7)
+          const month = visibleMonths[monthIdx]
+          if (month && col >= 0) toggleWeekday(month, col)
+        }}
+      >
+        {props.children}
+      </button>
+    </th>
   )
 
   // v9's `onWeekNumberClick` prop is declared in the types (deprecated, typed
@@ -197,18 +214,25 @@ export default function CreateEventForm() {
   // receive `week: CalendarWeek` (with `.days: CalendarDay[]`, each carrying
   // `.date`) — confirmed in node_modules/react-day-picker/dist/esm/classes/CalendarWeek.d.ts
   // and the `showWeekNumber && <components.WeekNumber week={week} .../>` call site.
+  // ISO week numbers (27, 28, …) confused users — render a select-row glyph
+  // instead (explicit children override the spread's week-number children).
   const WeekNumberCell = ({ week, ...thProps }: WeekNumberProps) => (
     <th
       {...thProps}
       onClick={() => toggleWeek(week.days.map((d) => d.date))}
       role="button"
-      aria-label={`Toggle all days in week ${week.weekNumber}`}
-    />
+      title="Select this whole week"
+      aria-label="Select this whole week"
+    >
+      »
+    </th>
   )
 
-  const summaryLabel = `${formatHour(startHour)} – ${formatHour(endHour)} · ${slotMinutes} min · ${
-    timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone
-  }`
+  const summaryLabel = datesOnly
+    ? `Dates only · ${timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone}`
+    : `${formatHour(startHour)} – ${formatHour(endHour)} · ${slotMinutes} min · ${
+        timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone
+      }`
 
   const hourSelectClass =
     'w-full bg-raised border-[1.5px] border-line rounded-[12px] px-3 py-2 text-sm text-ink'
@@ -239,12 +263,23 @@ export default function CreateEventForm() {
             setRangeDraft(undefined)
           }}
         />
+        <div className="mt-2 mb-3">
+          <span className="block text-xs font-bold text-ink-muted mb-1">Ask voters for</span>
+          <SegmentedControl
+            className="max-w-[280px]"
+            options={[
+              { value: 'times', label: '⏰ Specific times', title: 'Voters paint the hours they’re free' },
+              { value: 'dates', label: '📅 Dates only', title: 'Voters just mark which days they’re free — no hourly grid' },
+            ]}
+            value={datesOnly ? 'dates' : 'times'}
+            onChange={(v) => setDatesOnly(v === 'dates')}
+          />
+        </div>
         {/* One quick-select row per VISIBLE month, aligned above its month column. */}
         <div className={`mb-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
           {visibleMonths.map((m) => (
-            <div key={m.getTime()} className="flex flex-col items-center">
+            <div key={m.getTime()} className="flex justify-center">
               {renderQuickRow(m)}
-              {weekdayChips(m)}
             </div>
           ))}
         </div>
@@ -260,7 +295,7 @@ export default function CreateEventForm() {
               disabled={{ before: today }}
               startMonth={today}
               showWeekNumber
-              components={{ WeekNumber: WeekNumberCell }}
+              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader }}
             />
           ) : (
             <DayPicker
@@ -287,12 +322,12 @@ export default function CreateEventForm() {
               disabled={{ before: today }}
               startMonth={today}
               showWeekNumber
-              components={{ WeekNumber: WeekNumberCell }}
+              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader }}
             />
           )}
         </div>
         {pickMode === 'range' && (
-          <p className="text-xs text-ink-muted">
+          <p className="text-xs text-ink-muted mt-1">
             Tap a start date, then an end date — the whole span is added to your selection.
           </p>
         )}
@@ -349,73 +384,81 @@ export default function CreateEventForm() {
         </button>
         {advancedOpen && (
           <div className="px-4 pb-4 space-y-3">
-            {isMobile ? (
-              <div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Earliest</span>
-                    <WheelPicker
-                      ariaLabel="Earliest hour"
-                      options={HOURS_START}
-                      value={startHour}
-                      onChange={(v) => changeHours('start', v)}
-                    />
+            {!datesOnly && (
+              isMobile ? (
+                <div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Earliest</span>
+                      <WheelPicker
+                        ariaLabel="Earliest hour"
+                        options={HOURS_START}
+                        value={startHour}
+                        onChange={(v) => changeHours('start', v)}
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Latest</span>
+                      <WheelPicker
+                        ariaLabel="Latest hour"
+                        options={HOURS_END}
+                        value={endHour}
+                        onChange={(v) => changeHours('end', v)}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Latest</span>
-                    <WheelPicker
-                      ariaLabel="Latest hour"
-                      options={HOURS_END}
-                      value={endHour}
-                      onChange={(v) => changeHours('end', v)}
-                    />
-                  </div>
+                  {rangeHint && (
+                    <p className="text-xs text-ink-muted mt-1 text-center">
+                      Adjusted — the window must be at least 1 hour.
+                    </p>
+                  )}
                 </div>
-                {rangeHint && (
-                  <p className="text-xs text-ink-muted mt-1 text-center">
-                    Adjusted — the window must be at least 1 hour.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="start-hour" className="block text-xs font-bold text-ink-muted mb-1">Earliest</label>
-                    <select id="start-hour" value={startHour} onChange={(e) => changeHours('start', Number(e.target.value))} className={hourSelectClass}>
-                      {HOURS_START.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+              ) : (
+                <div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="start-hour" className="block text-xs font-bold text-ink-muted mb-1">Earliest</label>
+                      <ScrollSelect
+                        id="start-hour"
+                        ariaLabel="Earliest hour"
+                        options={HOURS_START}
+                        value={startHour}
+                        onChange={(v) => changeHours('start', v)}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="end-hour" className="block text-xs font-bold text-ink-muted mb-1">Latest</label>
+                      <ScrollSelect
+                        id="end-hour"
+                        ariaLabel="Latest hour"
+                        options={HOURS_END}
+                        value={endHour}
+                        onChange={(v) => changeHours('end', v)}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label htmlFor="end-hour" className="block text-xs font-bold text-ink-muted mb-1">Latest</label>
-                    <select id="end-hour" value={endHour} onChange={(e) => changeHours('end', Number(e.target.value))} className={hourSelectClass}>
-                      {HOURS_END.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {rangeHint && (
+                    <p className="text-xs text-ink-muted mt-1">
+                      Adjusted — the window must be at least 1 hour.
+                    </p>
+                  )}
                 </div>
-                {rangeHint && (
-                  <p className="text-xs text-ink-muted mt-1">
-                    Adjusted — the window must be at least 1 hour.
-                  </p>
-                )}
+              )
+            )}
+            {!datesOnly && (
+              <div>
+                <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
+                <SegmentedControl
+                  options={[
+                    { value: '15', label: '15 min' },
+                    { value: '30', label: '30 min' },
+                    { value: '60', label: '1 hour' },
+                  ]}
+                  value={String(slotMinutes) as '15' | '30' | '60'}
+                  onChange={(v) => setSlotMinutes(Number(v) as 15 | 30 | 60)}
+                />
               </div>
             )}
-            <div>
-              <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
-              <SegmentedControl
-                options={[
-                  { value: '15', label: '15 min' },
-                  { value: '30', label: '30 min' },
-                  { value: '60', label: '1 hour' },
-                ]}
-                value={String(slotMinutes) as '15' | '30' | '60'}
-                onChange={(v) => setSlotMinutes(Number(v) as 15 | 30 | 60)}
-              />
-            </div>
             <div>
               <label htmlFor="event-tz" className="block text-xs font-bold text-ink-muted mb-1">Time zone</label>
               <div className="flex gap-2">

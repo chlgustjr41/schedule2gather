@@ -17,10 +17,22 @@ const UNDO_HOTKEY_LABEL = IS_MAC ? '⌘Z' : 'Ctrl+Z'
 const REDO_HOTKEY_LABEL = IS_MAC ? '⌘⇧Z' : 'Ctrl+Shift+Z'
 const UNDO_DEPTH = 50
 
-const ZOOM_LEVELS = ['sm', 'md', 'lg'] as const
+const ZOOM_LEVELS = ['xs', 'sm', 'md', 'lg', 'xl'] as const
 type Zoom = (typeof ZOOM_LEVELS)[number]
-const CELL_CLASS: Record<Zoom, string> = { sm: 'w-8 h-5', md: 'w-12 h-6', lg: 'w-16 h-10' }
-const LABEL_CLASS: Record<Zoom, string> = { sm: 'text-[10px]', md: 'text-xs', lg: 'text-sm' }
+const CELL_CLASS: Record<Zoom, string> = {
+  xs: 'w-6 h-4',
+  sm: 'w-8 h-5',
+  md: 'w-12 h-6',
+  lg: 'w-16 h-10',
+  xl: 'w-20 h-12',
+}
+const LABEL_CLASS: Record<Zoom, string> = {
+  xs: 'text-[9px]',
+  sm: 'text-[10px]',
+  md: 'text-xs',
+  lg: 'text-sm',
+  xl: 'text-base',
+}
 
 interface AvailabilityGridProps {
   viewerTimezone: string
@@ -49,7 +61,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   const [zoom, setZoom] = useState<Zoom>(() => {
     try {
       const z = localStorage.getItem('s2g-grid-zoom')
-      return z === 'sm' || z === 'lg' ? z : 'md'
+      return (ZOOM_LEVELS as readonly string[]).includes(z ?? '') ? (z as Zoom) : 'md'
     } catch {
       return 'md'
     }
@@ -140,7 +152,6 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   const interactive = !readOnly
   const showPaintToggle = isMobile
   const stickyTimeColumn = paged && viewMode === 'month'
-  const scrollableMonth = paged && viewMode === 'month'
 
   const myCommittedBits = useMemo(() => {
     if (!event || !myParticipant) return null
@@ -404,7 +415,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       aria-label={`My availability for ${event.name}`}
       aria-rowcount={spd + 1}
       aria-colcount={event.dates.length + 1}
-      className={`border-collapse select-none ${scrollableMonth ? '' : 'mx-auto'}`}
+      className="border-collapse select-none mx-auto"
       onPointerMove={interactive ? handlePointerMove : undefined}
       onPointerUp={interactive ? handlePointerUp : undefined}
       onPointerCancel={interactive ? handlePointerUp : undefined}
@@ -413,7 +424,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       <thead>
         <tr role="row">
           <th
-            className={`w-20 ${stickyTimeColumn ? 'sticky left-0 bg-canvas z-10' : ''}`}
+            className={`w-20 ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
             aria-hidden="true"
           ></th>
           {visibleColumns.map((col) => {
@@ -454,7 +465,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               role="rowheader"
               scope="row"
               onClick={interactive ? () => void toggleRow(timeIdx) : undefined}
-              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-2 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-canvas z-10' : ''}`}
+              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-2 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
               title={interactive ? 'Click to toggle this entire row' : undefined}
             >
               {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
@@ -510,6 +521,81 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       </tbody>
     </table>
   )
+
+  if (event.datesOnly) {
+    return (
+      <div className="pt-2">
+        {interactive && (
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                title="Mark every date as available"
+                onClick={() => void setAllAvailable()}
+              >
+                Mark all available
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                title="Clear every date"
+                onClick={() => void setAllUnavailable()}
+              >
+                Clear all
+              </Button>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void undo()}
+                disabled={undoStack.length === 0}
+                title={`Undo (${UNDO_HOTKEY_LABEL})`}
+                aria-label={`Undo (${UNDO_HOTKEY_LABEL})`}
+                className="w-9 h-9 rounded-full border border-line bg-surface text-ink-muted hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ↺
+              </button>
+              <button
+                type="button"
+                onClick={() => void redo()}
+                disabled={redoStack.length === 0}
+                title={`Redo (${REDO_HOTKEY_LABEL})`}
+                aria-label={`Redo (${REDO_HOTKEY_LABEL})`}
+                className="w-9 h-9 rounded-full border border-line bg-surface text-ink-muted hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ↻
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2 justify-center">
+          {event.dates.map((dateStr, dateIdx) => {
+            const startIdx = dateIdx * spd
+            const mine = myDisplayBits.slice(startIdx, startIdx + spd).every(Boolean)
+            return (
+              <button
+                key={dateStr}
+                type="button"
+                disabled={!interactive}
+                onClick={interactive ? () => void toggleColumn(dateIdx) : undefined}
+                title={interactive ? (mine ? 'Tap to mark unavailable' : 'Tap to mark available') : undefined}
+                aria-pressed={mine}
+                className={`px-4 py-3 rounded-[12px] border text-sm font-bold transition select-none ${
+                  interactive ? 'cursor-pointer' : 'cursor-default'
+                } ${mine ? 'border-transparent' : 'bg-surface border-line text-ink hover:bg-raised'}`}
+                style={mine ? { backgroundColor: 'var(--s2g-mine)', color: 'var(--s2g-on-primary)' } : undefined}
+              >
+                {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="pt-2">
@@ -577,18 +663,35 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       <div className="overflow-x-auto" ref={scrollWrapRef}>
         {renderTable()}
       </div>
-      <div className="flex justify-center gap-1 sm:gap-2 mt-3 flex-wrap">
-        <Button variant="secondary" size="sm" aria-label="Zoom out" disabled={zoom === 'sm'} onClick={() => changeZoom(-1)}>
-          −
-        </Button>
-        <Button variant="secondary" size="sm" aria-label="Zoom in" disabled={zoom === 'lg'} onClick={() => changeZoom(1)}>
-          +
-        </Button>
+      <div className="flex items-center justify-between gap-2 mt-3 flex-wrap">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            aria-label="Zoom out"
+            title="Zoom out"
+            disabled={zoom === 'xs'}
+            onClick={() => changeZoom(-1)}
+          >
+            −
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            aria-label="Zoom in"
+            title="Zoom in"
+            disabled={zoom === 'xl'}
+            onClick={() => changeZoom(1)}
+          >
+            +
+          </Button>
+        </div>
         {paged && (
           <Button
             variant={eventDaysOnly ? 'primary' : 'secondary'}
             size="sm"
             aria-pressed={eventDaysOnly}
+            title="Show only the dates that are part of this event"
             onClick={() => setEventDaysOnly((v) => !v)}
           >
             Event days only

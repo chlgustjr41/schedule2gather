@@ -16,6 +16,26 @@ export function windowUtcRange(event: EventForLabels, w: SlotWindow): { start: D
   return { start, end: new Date(endStart.getTime() + event.slotMinutes * 60_000) }
 }
 
+/**
+ * Human label for a ranked/finalized window: a full "day, from–to" range
+ * normally, or just the day when the event is date-only (no hourly grid).
+ * Shared by BestTimesPanel, FinalizeSheet, and FinalizedBanner to avoid
+ * triplicating the day/from/to formatting.
+ */
+export function formatWindowLabel(
+  event: EventForLabels & { datesOnly?: boolean },
+  w: SlotWindow,
+  viewerTz: string,
+): string {
+  const range = windowUtcRange(event, w)
+  if (!range) return ''
+  const day = formatInTimeZone(range.start, viewerTz, 'EEE MMM d')
+  if (event.datesOnly) return day
+  const from = formatInTimeZone(range.start, viewerTz, 'h:mm a')
+  const to = formatInTimeZone(range.end, viewerTz, 'h:mm a')
+  return `${day}, ${from}–${to}`
+}
+
 export function formatIcsDate(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0')
   return (
@@ -74,10 +94,8 @@ export function summaryText(
 ): string {
   const range = windowUtcRange(event, w)
   if (!range) return url
-  const day = formatInTimeZone(range.start, viewerTz, 'EEE MMM d')
-  const from = formatInTimeZone(range.start, viewerTz, 'h:mm a')
-  const to = formatInTimeZone(range.end, viewerTz, 'h:mm a zzz')
-  return `${event.name} — ${day}, ${from}–${to} (${attendance}/${total} available): ${url}`
+  const label = formatWindowLabel(event, w, viewerTz)
+  return `${event.name} — ${label} (${attendance}/${total} available): ${url}`
 }
 
 /** Browser-only: trigger a .ics file download. Not unit-tested (DOM side effect). */

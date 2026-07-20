@@ -21,15 +21,29 @@ export default function AppHeader({ className = 'max-w-5xl' }: AppHeaderProps) {
         <div className="flex items-center gap-2">
           {isGoogleUser ? (
             <>
-              <Link to="/dashboard" className="text-sm font-bold text-primary hover:underline">
+              <Link
+                to="/dashboard"
+                className="text-sm font-bold text-primary hover:underline"
+                title="See and manage your events"
+              >
                 Dashboard
               </Link>
-              <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void signOut()}
+                title="Sign out of your account"
+              >
                 Sign out
               </Button>
             </>
           ) : (
-            <Button variant="ghost" size="sm" onClick={() => void signInWithGoogle().catch(() => {})}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void signInWithGoogle().catch(() => {})}
+              title="Sign in with Google to manage your events"
+            >
               Sign in
             </Button>
           )}

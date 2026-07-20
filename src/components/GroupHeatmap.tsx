@@ -65,41 +65,65 @@ export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
               {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
             </span>
             <div className="flex gap-[2px] flex-1">
-              {Array.from({ length: spd }).map((_, t) => {
-                const slotIdx = dateIdx * spd + t
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    aria-label={tipText(slotIdx)}
-                    onPointerEnter={() => setTip(slotIdx)}
-                    onPointerLeave={() => setTip(null)}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setTip((cur) => (cur === slotIdx ? null : slotIdx))
-                    }}
-                    className="relative flex-1 min-w-[4px] h-[18px] rounded-[2px] border-0 p-0 cursor-pointer"
-                    style={{ backgroundColor: heatColor(counts[slotIdx] ?? 0, total) }}
-                  >
-                    {tip === slotIdx && (
-                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 bg-ink text-canvas text-xs rounded-[8px] px-2 py-1 whitespace-nowrap pointer-events-none">
-                        {tipText(slotIdx)}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
+              {event.datesOnly ? (
+                <button
+                  type="button"
+                  aria-label={tipText(dateIdx * spd)}
+                  title={tipText(dateIdx * spd)}
+                  onPointerEnter={() => setTip(dateIdx * spd)}
+                  onPointerLeave={() => setTip(null)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setTip((cur) => (cur === dateIdx * spd ? null : dateIdx * spd))
+                  }}
+                  className="relative flex-1 h-[18px] rounded-[3px] border border-line/60 p-0 cursor-pointer"
+                  style={{ backgroundColor: heatColor(counts[dateIdx * spd] ?? 0, total) }}
+                >
+                  {tip === dateIdx * spd && (
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 bg-ink text-canvas text-xs rounded-[8px] px-2 py-1 whitespace-nowrap pointer-events-none">
+                      {tipText(dateIdx * spd)}
+                    </span>
+                  )}
+                </button>
+              ) : (
+                Array.from({ length: spd }).map((_, t) => {
+                  const slotIdx = dateIdx * spd + t
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      aria-label={tipText(slotIdx)}
+                      onPointerEnter={() => setTip(slotIdx)}
+                      onPointerLeave={() => setTip(null)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setTip((cur) => (cur === slotIdx ? null : slotIdx))
+                      }}
+                      className="relative flex-1 min-w-[4px] h-[18px] rounded-[2px] border border-line/60 p-0 cursor-pointer"
+                      style={{ backgroundColor: heatColor(counts[slotIdx] ?? 0, total) }}
+                    >
+                      {tip === slotIdx && (
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 bg-ink text-canvas text-xs rounded-[8px] px-2 py-1 whitespace-nowrap pointer-events-none">
+                          {tipText(slotIdx)}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })
+              )}
             </div>
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-2 mt-1">
-        <span className="w-16 shrink-0" />
-        <div className="flex justify-between flex-1 text-[10px] text-ink-muted">
-          <span>{formatSlotTimeLabel(event, 0, viewerTimezone)}</span>
-          <span>{formatSlotTimeLabel(event, spd - 1, viewerTimezone)}</span>
+      {!event.datesOnly && (
+        <div className="flex items-center gap-2 mt-1">
+          <span className="w-16 shrink-0" />
+          <div className="flex justify-between flex-1 text-[10px] text-ink-muted">
+            <span>{formatSlotTimeLabel(event, 0, viewerTimezone)}</span>
+            <span>{formatSlotTimeLabel(event, spd - 1, viewerTimezone)}</span>
+          </div>
         </div>
-      </div>
+      )}
       <div className="flex items-center gap-1 mt-3 text-[10px] text-ink-muted">
         <span>0</span>
         {swatch('var(--s2g-slot-empty)', true)}

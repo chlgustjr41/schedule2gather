@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
-import { formatInTimeZone } from 'date-fns-tz'
 import { useEventStore } from '@/stores/eventStore'
 import { unpack } from '@/lib/bitmap'
-import { windowUtcRange } from '@/lib/ics'
+import { windowUtcRange, formatWindowLabel } from '@/lib/ics'
 import { reopenEvent } from '@/services/eventService'
 import ExportSheet from '@/components/ExportSheet'
 import Button from '@/components/ui/Button'
@@ -37,9 +36,7 @@ export default function FinalizedBanner({ slug, isHost, viewerTimezone, shareUrl
   if (!event?.finalized) return null
   const { startSlot, endSlot } = event.finalized
   const range = windowUtcRange(event, { startSlot, endSlot })
-  const label = range
-    ? `${formatInTimeZone(range.start, viewerTimezone, 'EEE MMM d')}, ${formatInTimeZone(range.start, viewerTimezone, 'h:mm a')}–${formatInTimeZone(range.end, viewerTimezone, 'h:mm a')}`
-    : ''
+  const label = range ? formatWindowLabel(event, { startSlot, endSlot }, viewerTimezone) : ''
 
   const handleReopen = async () => {
     setError(null)
@@ -61,9 +58,9 @@ export default function FinalizedBanner({ slug, isHost, viewerTimezone, shareUrl
           <div className="text-xs text-ink-muted">{attendance}/{participants.length} can make it</div>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => setShowExport(true)}>Add to calendar</Button>
+          <Button size="sm" onClick={() => setShowExport(true)} title="Download or share this time to your calendar">Add to calendar</Button>
           {isHost && (
-            <Button variant="ghost" size="sm" onClick={() => void handleReopen()}>
+            <Button variant="ghost" size="sm" onClick={() => void handleReopen()} title="Reopen voting so people can keep painting">
               Reopen voting
             </Button>
           )}

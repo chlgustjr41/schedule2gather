@@ -25,7 +25,12 @@ export default function ShareLinkBanner({ url }: ShareLinkBannerProps) {
         <p className="text-sm font-extrabold">Share this link with your group</p>
         <p className="text-xs text-ink-muted truncate font-mono mt-0.5">{url}</p>
       </div>
-      <Button size="sm" onClick={() => void handleCopy()} className="shrink-0">
+      <Button
+        size="sm"
+        onClick={() => void handleCopy()}
+        className="shrink-0"
+        title="Copy the shareable link to your clipboard"
+      >
         {copied ? 'Copied ✓' : 'Copy link'}
       </Button>
     </Card>

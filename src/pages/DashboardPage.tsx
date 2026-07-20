@@ -28,6 +28,7 @@ type LoadAction =
   | { type: 'error' }
   | { type: 'ready'; events: MyEvent[] }
   | { type: 'remove'; slug: string }
+  | { type: 'removeMany'; slugs: string[] }
   | { type: 'reopen'; slug: string }
 
 function reduceLoad(state: LoadState, action: LoadAction): LoadState {
@@ -42,6 +43,12 @@ function reduceLoad(state: LoadState, action: LoadAction): LoadState {
       return state.phase === 'ready'
         ? { phase: 'ready', events: state.events.filter((ev) => ev.slug !== action.slug) }
         : state
+    case 'removeMany': {
+      const set = new Set(action.slugs)
+      return state.phase === 'ready'
+        ? { phase: 'ready', events: state.events.filter((ev) => !set.has(ev.slug)) }
+        : state
+    }
     case 'reopen':
       return state.phase === 'ready'
         ? {
@@ -79,6 +86,40 @@ export default function DashboardPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkError, setBulkError] = useState<string | null>(null)
+
+  const toggleSelect = (slug: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(slug)) next.delete(slug)
+      else next.add(slug)
+      return next
+    })
+  }
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true)
+    setBulkError(null)
+    const slugs = [...selected]
+    const results = await Promise.allSettled(slugs.map((s) => deleteEventRemote(s)))
+    const succeeded = slugs.filter((_, i) => results[i].status === 'fulfilled')
+    const failedCount = slugs.length - succeeded.length
+    dispatch({ type: 'removeMany', slugs: succeeded })
+    setCounts((prev) => {
+      const next = { ...prev }
+      for (const s of succeeded) delete next[s]
+      return next
+    })
+    setSelected(new Set())
+    setBulkConfirm(false)
+    setBulkDeleting(false)
+    if (failedCount > 0) {
+      setBulkError(`Couldn't delete ${failedCount} event${failedCount === 1 ? '' : 's'} — try again.`)
+    }
+  }
 
   useEffect(() => {
     if (!uid) return
@@ -183,6 +224,24 @@ export default function DashboardPage() {
         ) : (
           <>
             {actionError && <p className="text-sm text-danger mb-2">{actionError}</p>}
+            {selected.size > 0 && (
+              <div className="flex items-center justify-between gap-2 mb-3 bg-raised border border-line rounded-[12px] px-4 py-2">
+                <span className="text-sm font-bold">{selected.size} selected</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())} title="Clear selection">
+                    Clear
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setBulkConfirm(true)}
+                    title="Delete all selected events"
+                  >
+                    Delete selected
+                  </Button>
+                </div>
+              </div>
+            )}
             <ul className="space-y-3">
               {state.events.map((ev) => {
                 const c = counts[ev.slug]
@@ -193,6 +252,19 @@ export default function DashboardPage() {
                       onClick={() => navigate(`/e/${ev.slug}`)}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
+                        <label
+                          className="flex items-center justify-center w-11 h-11 -m-2 shrink-0 cursor-pointer rounded-[10px] hover:bg-canvas transition"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Select for bulk actions"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected.has(ev.slug)}
+                            onChange={() => toggleSelect(ev.slug)}
+                            aria-label={`Select ${ev.name} for bulk actions`}
+                            className="w-4 h-4 accent-[var(--s2g-primary)]"
+                          />
+                        </label>
                         <div className="min-w-0">
                           <div className="font-extrabold break-words">
                             {ev.name}{' '}
@@ -217,19 +289,37 @@ export default function DashboardPage() {
                           className="flex items-center gap-2 shrink-0"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <Button variant="secondary" size="sm" onClick={() => void handleCopy(ev.slug)}>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            title="Copy the invite link"
+                            onClick={() => void handleCopy(ev.slug)}
+                          >
                             {copiedSlug === ev.slug ? 'Copied ✓' : 'Copy link'}
                           </Button>
                           {ev.finalized ? (
-                            <Button variant="secondary" size="sm" onClick={() => void handleReopen(ev.slug)}>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              title="Reopen voting for this event"
+                              onClick={() => void handleReopen(ev.slug)}
+                            >
                               Reopen
                             </Button>
                           ) : (
                             <Link to={`/e/${ev.slug}`}>
-                              <Button variant="ghost" size="sm">Finalize…</Button>
+                              <Button variant="ghost" size="sm" title="Pick a final time for this event">
+                                Finalize…
+                              </Button>
                             </Link>
                           )}
-                          <Button variant="ghost" size="sm" className="text-danger" onClick={() => setConfirmDelete(ev)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-danger"
+                            title="Delete this event"
+                            onClick={() => setConfirmDelete(ev)}
+                          >
                             Delete
                           </Button>
                         </div>
@@ -254,6 +344,32 @@ export default function DashboardPage() {
               </Button>
               <Button variant="danger" size="md" className="flex-1" disabled={deleting} onClick={() => void handleDelete()}>
                 {deleting ? 'Deleting…' : 'Delete event'}
+              </Button>
+            </div>
+          </BottomSheet>
+        )}
+
+        {bulkConfirm && (
+          <BottomSheet
+            title={`Delete ${selected.size} event${selected.size === 1 ? '' : 's'}?`}
+            onClose={() => setBulkConfirm(false)}
+          >
+            <p className="text-sm text-ink-muted">
+              All votes and comments for these events are removed permanently. This can&rsquo;t be undone.
+            </p>
+            {bulkError && <p className="text-sm text-danger mt-2">{bulkError}</p>}
+            <div className="flex gap-2 mt-4">
+              <Button variant="secondary" size="md" className="flex-1" onClick={() => setBulkConfirm(false)}>
+                Keep them
+              </Button>
+              <Button
+                variant="danger"
+                size="md"
+                className="flex-1"
+                disabled={bulkDeleting}
+                onClick={() => void handleBulkDelete()}
+              >
+                {bulkDeleting ? 'Deleting…' : 'Delete events'}
               </Button>
             </div>
           </BottomSheet>

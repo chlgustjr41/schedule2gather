@@ -78,10 +78,15 @@ export default function JoinScreen() {
                   disabled={busy || !authReady}
                   onClick={() => handleClaim(p)}
                   className="w-full flex items-center gap-2 py-2 text-left hover:bg-raised rounded-[8px] px-1 disabled:opacity-50"
+                  title={p.protected ? `Continue as ${p.name} (passcode required)` : `Continue as ${p.name}`}
                 >
                   <Avatar name={p.name} size={26} />
                   <span className="font-bold text-sm flex-1">{p.name}</span>
-                  {p.protected && <span aria-label="Passcode protected">🔒</span>}
+                  {p.protected && (
+                    <span aria-label="Passcode protected" title="This name is protected by a passcode">
+                      🔒
+                    </span>
+                  )}
                 </button>
                 {claimTarget === p.participantId && (
                   <form
@@ -98,7 +103,12 @@ export default function JoinScreen() {
                       placeholder="Passcode"
                       autoFocus
                     />
-                    <Button size="sm" type="submit" disabled={busy || !authReady || claimPasscode.length < 4}>
+                    <Button
+                      size="sm"
+                      type="submit"
+                      disabled={busy || !authReady || claimPasscode.length < 4}
+                      title="Unlock this name with your passcode"
+                    >
                       Unlock
                     </Button>
                   </form>
@@ -143,7 +153,13 @@ export default function JoinScreen() {
               taking it.
             </p>
           </div>
-          <Button size="lg" type="submit" disabled={busy || !authReady || newName.trim().length === 0} className="mt-4">
+          <Button
+            size="lg"
+            type="submit"
+            disabled={busy || !authReady || newName.trim().length === 0}
+            className="mt-4"
+            title="Join the event and mark your available times"
+          >
             {!authReady ? 'Connecting…' : busy ? 'Joining…' : 'Join & paint my times'}
           </Button>
         </form>

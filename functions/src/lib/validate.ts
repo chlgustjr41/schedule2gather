@@ -18,6 +18,8 @@ export interface CreateEventInput {
   timeRange: { start: number; end: number }
   slotMinutes: 15 | 30 | 60
   timezone: string
+  /** True when the host only wants date-level voting (no hourly grid). */
+  datesOnly?: boolean
 }
 
 /**
@@ -123,6 +125,11 @@ export function validateCreateEventInput(input: unknown): asserts input is Creat
   // slotMinutes
   if (!SLOT_MINUTES.includes(i.slotMinutes as (typeof SLOT_MINUTES)[number])) {
     throw new ValidationError(`slotMinutes must be one of: ${SLOT_MINUTES.join(', ')}`)
+  }
+
+  // datesOnly (optional)
+  if (i.datesOnly !== undefined && typeof i.datesOnly !== 'boolean') {
+    throw new ValidationError('datesOnly must be a boolean')
   }
 
   // timezone

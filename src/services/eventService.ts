@@ -32,6 +32,8 @@ export interface CreateEventInput {
   timeRange: { start: number; end: number }
   slotMinutes: 15 | 30 | 60
   timezone: string
+  /** True when the host only wants date-level voting (no hourly grid). */
+  datesOnly?: boolean
 }
 
 export interface CreateEventResult {
@@ -67,6 +69,8 @@ export interface EventDoc {
   slotCount: number
   finalized?: FinalizedWindow | null
   lastVisitedAt?: { seconds: number; nanoseconds: number } | null
+  /** True when the host only wants date-level voting (no hourly grid). */
+  datesOnly?: boolean
 }
 
 /**

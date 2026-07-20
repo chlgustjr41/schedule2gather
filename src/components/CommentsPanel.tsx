@@ -78,7 +78,7 @@ export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid, 
   }
 
   return (
-    <section className="max-w-2xl mx-auto mt-8 p-4">
+    <section className="max-w-5xl mx-auto mt-8 p-4">
       <h2 className="text-lg font-extrabold mb-3">Comments</h2>
 
       <form onSubmit={handlePost} className="mb-4">
