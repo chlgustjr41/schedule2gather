@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
-import { formatInTimeZone } from 'date-fns-tz'
 import { useEventStore } from '@/stores/eventStore'
 import { bestWindows } from '@/lib/bestSlots'
-import { windowUtcRange } from '@/lib/ics'
+import { formatWindowLabel } from '@/lib/ics'
 import { finalizeEvent } from '@/services/eventService'
 import { slotsPerDay } from '@/lib/slots'
 import { formatSlotDateLabel, formatSlotTimeLabel } from '@/lib/timezoneSlots'
@@ -41,14 +40,8 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
   if (!event) return null
   const spd = slotsPerDay(event.timeRange, event.slotMinutes)
 
-  const windowLabel = (startSlot: number, endSlot: number) => {
-    const range = windowUtcRange(event, { startSlot, endSlot })
-    if (!range) return ''
-    const day = formatInTimeZone(range.start, viewerTimezone, 'EEE MMM d')
-    const from = formatInTimeZone(range.start, viewerTimezone, 'h:mm a')
-    const to = formatInTimeZone(range.end, viewerTimezone, 'h:mm a')
-    return `${day}, ${from}–${to}`
-  }
+  const windowLabel = (startSlot: number, endSlot: number) =>
+    formatWindowLabel(event, { startSlot, endSlot }, viewerTimezone)
 
   const durationLabel = (slots: number) => {
     const mins = slots * event.slotMinutes
@@ -57,6 +50,10 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
 
   const resolveWindow = (): { startSlot: number; endSlot: number } | null => {
     if (choice === 'custom') {
+      if (event.datesOnly) {
+        const startSlot = customDate * spd
+        return { startSlot, endSlot: startSlot + spd - 1 }
+      }
       const startSlot = customDate * spd + customStart
       const endSlot = Math.min(startSlot + customSlots - 1, customDate * spd + spd - 1)
       return { startSlot, endSlot }
@@ -112,31 +109,35 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
           <span className="font-bold">Custom time…</span>
         </label>
         {choice === 'custom' && (
-          <div className="grid grid-cols-3 gap-2 pl-6">
+          <div className={`grid gap-2 pl-6 ${event.datesOnly ? 'grid-cols-1' : 'grid-cols-3'}`}>
             <select value={customDate} onChange={(e) => setCustomDate(Number(e.target.value))} className={selectClass} aria-label="Date">
               {event.dates.map((d, i) => (
                 <option key={d} value={i}>{formatSlotDateLabel(event, i, viewerTimezone)}</option>
               ))}
             </select>
-            <select
-              value={customStart}
-              onChange={(e) => {
-                const t = Number(e.target.value)
-                setCustomStart(t)
-                setCustomSlots((s) => Math.min(s, spd - t))
-              }}
-              className={selectClass}
-              aria-label="Start time"
-            >
-              {Array.from({ length: spd }).map((_, t) => (
-                <option key={t} value={t}>{formatSlotTimeLabel(event, customDate * spd + t, viewerTimezone)}</option>
-              ))}
-            </select>
-            <select value={customSlots} onChange={(e) => setCustomSlots(Number(e.target.value))} className={selectClass} aria-label="Duration">
-              {Array.from({ length: spd - customStart }).map((_, i) => (
-                <option key={i + 1} value={i + 1}>{durationLabel(i + 1)}</option>
-              ))}
-            </select>
+            {!event.datesOnly && (
+              <>
+                <select
+                  value={customStart}
+                  onChange={(e) => {
+                    const t = Number(e.target.value)
+                    setCustomStart(t)
+                    setCustomSlots((s) => Math.min(s, spd - t))
+                  }}
+                  className={selectClass}
+                  aria-label="Start time"
+                >
+                  {Array.from({ length: spd }).map((_, t) => (
+                    <option key={t} value={t}>{formatSlotTimeLabel(event, customDate * spd + t, viewerTimezone)}</option>
+                  ))}
+                </select>
+                <select value={customSlots} onChange={(e) => setCustomSlots(Number(e.target.value))} className={selectClass} aria-label="Duration">
+                  {Array.from({ length: spd - customStart }).map((_, i) => (
+                    <option key={i + 1} value={i + 1}>{durationLabel(i + 1)}</option>
+                  ))}
+                </select>
+              </>
+            )}
           </div>
         )}
         {error && <p className="text-sm text-danger">{error}</p>}

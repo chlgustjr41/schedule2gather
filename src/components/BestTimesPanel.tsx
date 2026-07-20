@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
-import { formatInTimeZone } from 'date-fns-tz'
 import { useEventStore } from '@/stores/eventStore'
 import { bestWindows, type BestWindow } from '@/lib/bestSlots'
-import { windowUtcRange } from '@/lib/ics'
+import { windowUtcRange, formatWindowLabel } from '@/lib/ics'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import ExportSheet from '@/components/ExportSheet'
@@ -53,16 +52,14 @@ export default function BestTimesPanel({ viewerTimezone, shareUrl, isHost, slug 
           {windows.map((w) => {
             const range = windowUtcRange(event, w)
             if (!range) return null
-            const day = formatInTimeZone(range.start, viewerTimezone, 'EEE MMM d')
-            const from = formatInTimeZone(range.start, viewerTimezone, 'h:mm a')
-            const to = formatInTimeZone(range.end, viewerTimezone, 'h:mm a')
+            const label = formatWindowLabel(event, w, viewerTimezone)
             return (
               <li key={w.startSlot} className="flex items-center justify-between gap-2">
                 <span className="text-sm">
-                  <b className="font-extrabold">{day}, {from}–{to}</b>{' '}
+                  <b className="font-extrabold">{label}</b>{' '}
                   <span className="text-success font-extrabold">{w.attendance}/{w.total}</span>
                 </span>
-                <Button variant="secondary" size="sm" onClick={() => setExportWindow(w)}>
+                <Button variant="secondary" size="sm" onClick={() => setExportWindow(w)} title="Add this time to your calendar">
                   Add to cal ⤓
                 </Button>
               </li>
@@ -79,7 +76,7 @@ export default function BestTimesPanel({ viewerTimezone, shareUrl, isHost, slug 
         />
       )}
       {isHost && (
-        <Button size="sm" className="mt-3" onClick={() => setShowFinalize(true)}>
+        <Button size="sm" className="mt-3" onClick={() => setShowFinalize(true)} title="Pick the final time and lock voting">
           🏁 Finish vote
         </Button>
       )}
