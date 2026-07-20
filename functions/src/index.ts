@@ -66,3 +66,5 @@ export const createEvent = onCall(
 )
 
 export { cleanupExpiredEvents } from './cleanupExpiredEvents'
+export { deleteEvent } from './deleteEvent'
+export { joinWithName } from './joinWithName'

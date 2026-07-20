@@ -16,12 +16,11 @@ import CommentsPanel from '@/components/CommentsPanel'
 import BestTimesPanel from '@/components/BestTimesPanel'
 import GroupHeatmap from '@/components/GroupHeatmap'
 import FinalizedBanner from '@/components/FinalizedBanner'
+import AppHeader from '@/components/AppHeader'
 import Avatar from '@/components/ui/Avatar'
-import ThemeToggle from '@/components/ui/ThemeToggle'
-import Wordmark from '@/components/ui/Wordmark'
 import Card from '@/components/ui/Card'
 
-type NamePromptState = { show: false } | { show: true; priorNames: string[]; error: string | null }
+type NamePromptState = { show: boolean }
 
 export default function EventPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -34,7 +33,7 @@ export default function EventPage() {
   const loading = useEventStore((s) => s.loading)
   const notFound = useEventStore((s) => s.notFound)
   const loadEvent = useEventStore((s) => s.loadEvent)
-  const joinAs = useEventStore((s) => s.joinAs)
+  const rejoinStored = useEventStore((s) => s.rejoinStored)
   const reset = useEventStore((s) => s.reset)
   const [viewerTimezone, setViewerTimezone] = useState<string>(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -59,15 +58,15 @@ export default function EventPage() {
     const entries = Object.entries(map)
     if (entries.length === 1) {
       const [normalizedKey, stored] = entries[0]
-      void joinAs(stored.rawName || normalizedKey, user.uid)
-    } else {
-      setNamePrompt({
-        show: true,
-        priorNames: entries.map(([n, stored]) => stored.rawName || n),
-        error: null,
+      // Auth-reset edge (spec §6.4): stored identity's same-uid update can be
+      // denied — fall through to the join screen so the user claims the name.
+      rejoinStored(stored.rawName || normalizedKey, user.uid).catch(() => {
+        setNamePrompt({ show: true })
       })
+    } else {
+      setNamePrompt({ show: true })
     }
-  }, [slug, event, user, myParticipant, joinAs])
+  }, [slug, event, user, myParticipant, rejoinStored])
 
   const participantId = myParticipant?.participantId
   const participantName = myParticipant?.name
@@ -107,36 +106,15 @@ export default function EventPage() {
     }
   }
 
-  const handleJoin = async (name: string) => {
-    if (!slug || !user) return
-    try {
-      await joinAs(name, user.uid)
-      setNamePrompt({ show: false })
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to join. Try again.'
-      // Reload the prior-names hint so the prompt re-renders with the error.
-      const map = loadParticipantsForEvent(slug)
-      const entries = Object.entries(map)
-      setNamePrompt({
-        show: true,
-        priorNames: entries.map(([n, stored]) => stored.rawName || n),
-        error: msg,
-      })
-    }
-  }
-
   const shareUrl = `${window.location.origin}/e/${slug}`
   const finalized = event.finalized ?? null
 
   return (
     <div className="min-h-screen">
-      <header className="max-w-5xl mx-auto px-4 pt-4 flex items-center justify-between">
-        <Wordmark />
-        <ThemeToggle />
-      </header>
+      <AppHeader />
       <main className="px-4 pb-12">
         {!finalized && !myParticipant && namePrompt.show ? (
-          <JoinScreen priorNames={namePrompt.priorNames} error={namePrompt.error} onSubmit={handleJoin} />
+          <JoinScreen />
         ) : (
           <>
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between max-w-5xl mx-auto mt-4 mb-4 gap-3">
