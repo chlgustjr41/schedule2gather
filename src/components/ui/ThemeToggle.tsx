@@ -9,6 +9,7 @@ export default function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       className="w-9 h-9 rounded-full border border-line bg-surface text-sm flex items-center justify-center hover:bg-raised"
     >
       {isDark ? '☀️' : '🌙'}

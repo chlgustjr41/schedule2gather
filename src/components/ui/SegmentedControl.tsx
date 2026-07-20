@@ -1,5 +1,5 @@
 interface SegmentedControlProps<T extends string> {
-  options: { value: T; label: string }[]
+  options: { value: T; label: string; title?: string }[]
   value: T
   onChange: (value: T) => void
   className?: string
@@ -20,6 +20,7 @@ export default function SegmentedControl<T extends string>({
           type="button"
           aria-selected={value === opt.value}
           onClick={() => onChange(opt.value)}
+          title={opt.title}
           className={`flex-1 text-sm font-bold rounded-full px-3 py-1.5 transition ${
             value === opt.value ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted hover:text-ink'
           }`}
