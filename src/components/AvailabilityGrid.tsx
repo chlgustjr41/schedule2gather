@@ -68,10 +68,11 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   })
   const [eventDaysOnly, setEventDaysOnly] = useState(true)
   const [dateOnlyView, setDateOnlyView] = useState<'all' | 'week' | 'month'>(() => (isMobile ? 'week' : 'all'))
-  // "Not available" paint mode: while on, painting marks busy times (shown in
-  // the danger color instead of the mine color) rather than free ones. Every
-  // toggle of this mode (on or off) inverts the current bits — see
-  // toggleNotAvailableMode — so entering and exiting are fully symmetric.
+  // "Not available" paint mode: a pure display lens, not a data transform.
+  // Toggling it never writes anything — it only changes how existing bits are
+  // rendered (see applyLens below) so painting/clicking always writes real
+  // availability directly, and the group overlay is never affected by merely
+  // opening the mode.
   const [notAvailableMode, setNotAvailableMode] = useState(false)
 
   const changeZoom = (dir: 1 | -1) =>
@@ -264,18 +265,26 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
 
   const myDisplayBits = draftBits ?? myCommittedBits
 
+  // Self-inverse translation between a real availability bit and how it's
+  // painted on screen. Off: identity. On: red = not-really-available, blank =
+  // really-available — so an all-blank page reads as "fully busy" and an
+  // all-painted page reads as "fully free," matching the busy-paint mental
+  // model. Because it's just a negation, applying it twice is a no-op, which
+  // is what lets the same helper translate real→display and display→real.
+  const applyLens = (bit: boolean): boolean => (notAvailableMode ? !bit : bit)
+
   const toggleColumn = async (dateIdx: number) => {
     if (!myCommittedBits) return
     const startIdx = dateIdx * spd
     const endIdx = startIdx + spd - 1
     let anyOff = false
     for (let i = startIdx; i <= endIdx; i++) {
-      if (!myCommittedBits[i]) {
+      if (!applyLens(myCommittedBits[i])) {
         anyOff = true
         break
       }
     }
-    const value = anyOff
+    const value = applyLens(anyOff)
     const next = [...myCommittedBits]
     for (let i = startIdx; i <= endIdx; i++) next[i] = value
     pushHistory(myParticipant?.availability ?? '')
@@ -286,74 +295,38 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     if (!myCommittedBits || !event) return
     let anyOff = false
     for (let d = 0; d < event.dates.length; d++) {
-      if (!myCommittedBits[d * spd + timeIdx]) {
+      if (!applyLens(myCommittedBits[d * spd + timeIdx])) {
         anyOff = true
         break
       }
     }
-    const value = anyOff
+    const value = applyLens(anyOff)
     const next = [...myCommittedBits]
     for (let d = 0; d < event.dates.length; d++) next[d * spd + timeIdx] = value
     pushHistory(myParticipant?.availability ?? '')
     await updateMyAvailability(pack(next))
   }
 
-  const setAllAvailable = async () => {
+  // "Mark all" / "Clear all" target how the whole grid LOOKS, translated
+  // through the same lens as an individual click — so "Mark all" paints every
+  // cell red while in "not available" mode instead of green.
+  const markAllPainted = async () => {
     if (!event || !myCommittedBits) return
-    const next = new Array(event.slotCount).fill(true)
+    const next = new Array(event.slotCount).fill(applyLens(true))
     pushHistory(myParticipant?.availability ?? '')
     await updateMyAvailability(pack(next))
   }
 
-  const setAllUnavailable = async () => {
+  const clearAllPainted = async () => {
     if (!event || !myCommittedBits) return
-    const next = new Array(event.slotCount).fill(false)
+    const next = new Array(event.slotCount).fill(applyLens(false))
     pushHistory(myParticipant?.availability ?? '')
     await updateMyAvailability(pack(next))
   }
 
-  // Symmetric: every toggle (either direction) inverts the current bits, so
-  // the grid always shows the correct thing for the mode you're in — entering
-  // shows what's currently NOT available (ready to paint more busy time onto),
-  // exiting converts the busy-painted view back into real availability bits.
-  // Slot indices belonging to the CURRENTLY VISIBLE page only (real event
-  // dates, not the greyed out-of-range columns) — "not available" mode only
-  // ever touches what's on screen, never other pages' data.
-  const currentPageSlotIndices = (): number[] =>
-    visibleColumns
-      .filter((c) => c.eventDateIdx !== -1)
-      .flatMap((c) => {
-        const start = c.eventDateIdx * spd
-        return Array.from({ length: spd }, (_, i) => start + i)
-      })
-
-  // Inverts the current page's slots and commits — but only if at least one
-  // of them is currently selected. An all-blank page has nothing meaningful
-  // to invert, so it's left blank rather than lighting up entirely.
-  const invertCurrentPageIfNeeded = async () => {
-    if (!myCommittedBits) return
-    const pageSlotIdxs = currentPageSlotIndices()
-    const hasAnySelectedOnPage = pageSlotIdxs.some((idx) => myCommittedBits[idx])
-    if (!hasAnySelectedOnPage) return
-    const next = [...myCommittedBits]
-    for (const idx of pageSlotIdxs) next[idx] = !next[idx]
-    pushHistory(myParticipant?.availability ?? '')
-    await updateMyAvailability(pack(next))
-  }
-
-  const toggleNotAvailableMode = async () => {
-    setNotAvailableMode((v) => !v)
-    await invertCurrentPageIfNeeded()
-  }
-
-  // Leaving the page while the mode is on would otherwise leave data on the
-  // page you're navigating away from sitting in "busy" semantics — treat
-  // navigation as an implicit exit so it's always correctly inverted back.
-  const exitNotAvailableModeForNavigation = async () => {
-    if (!notAvailableMode) return
-    setNotAvailableMode(false)
-    await invertCurrentPageIfNeeded()
-  }
+  // Purely a view toggle — never writes availability, so opening or closing
+  // the mode has zero effect on the group overlay. Only painting does.
+  const toggleNotAvailableMode = () => setNotAvailableMode((v) => !v)
 
   const triggerHaptic = () => {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
@@ -563,7 +536,8 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               }
               const dateIdx = col.eventDateIdx
               const slotIdx = dateIdx * spd + timeIdx
-              const mine = myDisplayBits[slotIdx]
+              const rawMine = myDisplayBits[slotIdx]
+              const mine = applyLens(rawMine)
               const bg = mineColor(mine, notAvailableMode)
               return (
                 <td
@@ -571,7 +545,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                   role="gridcell"
                   tabIndex={interactive && slotIdx === focusedSlot ? 0 : -1}
                   aria-selected={mine}
-                  aria-label={`${formatSlotDateLabel(event, dateIdx, viewerTimezone)} ${formatSlotTimeLabel(event, timeIdx, viewerTimezone)} — ${mine ? 'available' : 'unavailable'}`}
+                  aria-label={`${formatSlotDateLabel(event, dateIdx, viewerTimezone)} ${formatSlotTimeLabel(event, timeIdx, viewerTimezone)} — ${rawMine ? 'available' : 'unavailable'}`}
                   data-slot-idx={interactive ? slotIdx : undefined}
                   onFocus={interactive ? () => setFocusedSlot(slotIdx) : undefined}
                   onPointerDown={interactive ? handlePointerDown(slotIdx) : undefined}
@@ -643,7 +617,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                 size="sm"
                 type="button"
                 title="Mark every date as available"
-                onClick={() => void setAllAvailable()}
+                onClick={() => void markAllPainted()}
               >
                 Mark all available
               </Button>
@@ -652,7 +626,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                 size="sm"
                 type="button"
                 title="Clear every date"
-                onClick={() => void setAllUnavailable()}
+                onClick={() => void clearAllPainted()}
               >
                 Clear all
               </Button>
@@ -722,7 +696,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           }
           value={viewSize}
           onChange={(v) => {
-            void exitNotAvailableModeForNavigation()
+            setNotAvailableMode(false)
             setViewSize(v)
             setPageIdx(0)
           }}
@@ -731,15 +705,15 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           variant="secondary"
           size="sm"
           type="button"
-          onClick={() => void setAllAvailable()}
+          onClick={() => void markAllPainted()}
         >
-          Mark all available
+          Mark all
         </Button>
         <Button
           variant="secondary"
           size="sm"
           type="button"
-          onClick={() => void setAllUnavailable()}
+          onClick={() => void clearAllPainted()}
         >
           Clear all
         </Button>
@@ -748,7 +722,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           size="sm"
           type="button"
           aria-pressed={notAvailableMode}
-          onClick={() => void toggleNotAvailableMode()}
+          onClick={toggleNotAvailableMode}
           title={
             notAvailableMode
               ? 'Now painting busy times — tap to flip back to your real availability'
@@ -844,7 +818,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
             size="sm"
             type="button"
             onClick={() => {
-              void exitNotAvailableModeForNavigation()
+              setNotAvailableMode(false)
               setPageIdx((p) => Math.max(0, p - 1))
             }}
             disabled={pageIdx === 0}
@@ -864,7 +838,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
             size="sm"
             type="button"
             onClick={() => {
-              void exitNotAvailableModeForNavigation()
+              setNotAvailableMode(false)
               setPageIdx((p) => Math.min(totalPages - 1, p + 1))
             }}
             disabled={pageIdx >= totalPages - 1}
