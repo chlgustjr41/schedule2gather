@@ -63,6 +63,7 @@ export const createEvent = onCall(
       ...(input.location?.trim()
         ? { location: input.location.trim(), locationIsMapLink: input.locationIsMapLink ?? false }
         : {}),
+      ...(input.description?.trim() ? { description: input.description.trim() } : {}),
     })
 
     return { slug }

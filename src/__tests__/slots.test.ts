@@ -18,6 +18,17 @@ describe('slots', () => {
     it('15-minute slots single hour → 4', () => {
       expect(slotsPerDay({ start: 14, end: 15 }, 15)).toBe(4)
     })
+
+    // Fractional-hour boundaries (9:15–17:30 etc.) from the minute-precision
+    // time range selector — the formula is unit-agnostic, no code change
+    // needed here, just regression coverage.
+    it('15-minute slots from 9:15 to 17:30 → 33', () => {
+      expect(slotsPerDay({ start: 9.25, end: 17.5 }, 15)).toBe(33)
+    })
+
+    it('30-minute slots from 9:30 to 12:30 → 6', () => {
+      expect(slotsPerDay({ start: 9.5, end: 12.5 }, 30)).toBe(6)
+    })
   })
 
   describe('slotIndex', () => {

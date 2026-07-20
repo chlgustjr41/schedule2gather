@@ -140,10 +140,48 @@ describe('validateCreateEventInput', () => {
       ).toThrow(ValidationError)
     })
 
-    it('rejects non-integer hours', () => {
+    it('rejects hours not aligned to a 15-minute increment', () => {
       expect(() =>
-        validateCreateEventInput({ ...validSpecificDates, timeRange: { start: 9.5, end: 17 } }),
+        validateCreateEventInput({ ...validSpecificDates, timeRange: { start: 9.1, end: 17 } }),
       ).toThrow(ValidationError)
+    })
+
+    it('accepts quarter-hour-precision start/end (e.g. 9:15–17:30)', () => {
+      expect(() =>
+        validateCreateEventInput({
+          ...validSpecificDates,
+          timeRange: { start: 9.25, end: 17.5 },
+          slotMinutes: 15,
+        }),
+      ).not.toThrow()
+    })
+
+    it('accepts a whole-hour range unchanged (backward compat with existing events)', () => {
+      expect(() =>
+        validateCreateEventInput({ ...validSpecificDates, timeRange: { start: 9, end: 17 } }),
+      ).not.toThrow()
+    })
+
+    it('rejects a duration that is not a whole multiple of slotMinutes', () => {
+      // 45-minute window with 60-minute slots — not a whole number of slots.
+      expect(() =>
+        validateCreateEventInput({
+          ...validSpecificDates,
+          timeRange: { start: 9.25, end: 10 },
+          slotMinutes: 60,
+        }),
+      ).toThrow(ValidationError)
+    })
+
+    it('accepts a duration that is a whole multiple of slotMinutes', () => {
+      // 45-minute window with 15-minute slots — exactly 3 slots.
+      expect(() =>
+        validateCreateEventInput({
+          ...validSpecificDates,
+          timeRange: { start: 9.25, end: 10 },
+          slotMinutes: 15,
+        }),
+      ).not.toThrow()
     })
   })
 
@@ -219,5 +257,35 @@ describe('computeSlotCount', () => {
         timezone: 'UTC',
       }),
     ).toBe(48)
+  })
+})
+
+describe('optional fields sent as null', () => {
+  // The Firebase callable SDK serializes an omitted/undefined field as `null`
+  // on the wire (see joinWithNameRemote's client-side workaround). Regression
+  // guard: leaving location/description/datesOnly/locationIsMapLink blank in
+  // the create form must not fail validation.
+  it('accepts location/description/datesOnly/locationIsMapLink as null', () => {
+    expect(() =>
+      validateCreateEventInput({
+        ...validSpecificDates,
+        location: null,
+        description: null,
+        datesOnly: null,
+        locationIsMapLink: null,
+      }),
+    ).not.toThrow()
+  })
+
+  it('still rejects a non-string location that is not null/undefined', () => {
+    expect(() => validateCreateEventInput({ ...validSpecificDates, location: 42 })).toThrow(
+      ValidationError,
+    )
+  })
+
+  it('still rejects a non-string description that is not null/undefined', () => {
+    expect(() => validateCreateEventInput({ ...validSpecificDates, description: 42 })).toThrow(
+      ValidationError,
+    )
   })
 })

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DayPicker, type DateRange, type WeekNumberProps } from 'react-day-picker'
+import { AnimatePresence, motion } from 'motion/react'
+import { DayPicker, type DateRange, type MonthCaptionProps, type WeekNumberProps } from 'react-day-picker'
 import 'react-day-picker/style.css'
 import {
   addMonths,
@@ -20,7 +21,7 @@ import { clampTimeRange } from '@/lib/timeRange'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
-import ScrollSelect from '@/components/ui/ScrollSelect'
+import DualRangeSlider from '@/components/ui/DualRangeSlider'
 import SegmentedControl from '@/components/ui/SegmentedControl'
 import Switch from '@/components/ui/Switch'
 import TextField from '@/components/ui/TextField'
@@ -28,15 +29,43 @@ import WheelPicker from '@/components/ui/WheelPicker'
 
 type DayCategory = 'all' | 'weekdays' | 'weekends'
 
-function formatHour(h: number): string {
-  const norm = h % 24
-  const suffix = norm < 12 ? 'AM' : 'PM'
-  const display = norm % 12 === 0 ? 12 : norm % 12
-  return `${display} ${suffix}`
+/** `totalMinutes` is minutes-from-midnight, 0..1440 (1440 = end-of-day / 12 AM wrap). */
+function formatMinutesLabel(totalMinutes: number): string {
+  const norm = ((totalMinutes % 1440) + 1440) % 1440
+  const h24 = Math.floor(norm / 60)
+  const m = norm % 60
+  const suffix = h24 < 12 ? 'AM' : 'PM'
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12
+  return m === 0 ? `${h12} ${suffix}` : `${h12}:${String(m).padStart(2, '0')} ${suffix}`
 }
 
-const HOURS_START = Array.from({ length: 24 }, (_, h) => ({ value: h, label: formatHour(h) }))
-const HOURS_END = Array.from({ length: 24 }, (_, i) => ({ value: i + 1, label: formatHour(i + 1) }))
+/** "09:15" 24-hour format, for the native <input type="time"> desktop fields. */
+function minutesToTimeInputValue(totalMinutes: number): string {
+  const norm = Math.min(1439, Math.max(0, totalMinutes))
+  const h = Math.floor(norm / 60)
+  const m = norm % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function timeInputValueToMinutes(value: string): number | null {
+  const match = /^(\d{2}):(\d{2})$/.exec(value)
+  if (!match) return null
+  const h = Number(match[1])
+  const m = Number(match[2])
+  if (h > 23 || m > 59) return null
+  return h * 60 + m
+}
+
+/** Earliest/Latest wheel options at `step`-minute increments across the day. */
+function buildMinuteOptions(step: number, kind: 'start' | 'end'): { value: number; label: string }[] {
+  const from = kind === 'start' ? 0 : step
+  const to = kind === 'start' ? 1440 - step : 1440
+  const opts = []
+  for (let m = from; m <= to; m += step) {
+    opts.push({ value: m, label: formatMinutesLabel(m) })
+  }
+  return opts
+}
 
 export default function CreateEventForm() {
   const navigate = useNavigate()
@@ -49,8 +78,10 @@ export default function CreateEventForm() {
 
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
-  const [startHour, setStartHour] = useState(9)
-  const [endHour, setEndHour] = useState(21)
+  const [description, setDescription] = useState('')
+  const [optionalOpen, setOptionalOpen] = useState(false)
+  const [startMinutes, setStartMinutes] = useState(9 * 60)
+  const [endMinutes, setEndMinutes] = useState(21 * 60)
   const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(30)
   const detectedTz = useMemo(() => detectTimezone(), [])
   const [timezone, setTimezone] = useState(detectedTz)
@@ -66,6 +97,11 @@ export default function CreateEventForm() {
   // months are actually on screen as the user pages through the calendar.
   const [displayMonth, setDisplayMonth] = useState<Date>(today)
   const visibleMonths = isMobile ? [displayMonth] : [displayMonth, addMonths(displayMonth, 1)]
+  // DayPicker's built-in Nav is suppressed (components.Nav returns null below)
+  // in favor of these, rendered on the Pick-days/Date-range toggle's row.
+  const canGoPrevMonth = startOfMonth(displayMonth) > startOfMonth(today)
+  const goToPrevMonth = () => setDisplayMonth((m) => addMonths(m, -1))
+  const goToNextMonth = () => setDisplayMonth((m) => addMonths(m, 1))
 
   const tzOptions = useMemo(() => {
     const tzs = COMMON_TIMEZONES as readonly string[]
@@ -73,15 +109,20 @@ export default function CreateEventForm() {
     return [detectedTz, ...tzs]
   }, [detectedTz])
 
-  const changeHours = (changed: 'start' | 'end', value: number) => {
+  // Mobile wheel options, regenerated whenever the slot-length step changes.
+  const startTimeOptions = useMemo(() => buildMinuteOptions(slotMinutes, 'start'), [slotMinutes])
+  const endTimeOptions = useMemo(() => buildMinuteOptions(slotMinutes, 'end'), [slotMinutes])
+
+  const changeMinutes = (changed: 'start' | 'end', value: number) => {
     const next = clampTimeRange(
-      changed === 'start' ? value : startHour,
-      changed === 'end' ? value : endHour,
+      changed === 'start' ? value : startMinutes,
+      changed === 'end' ? value : endMinutes,
       changed,
+      slotMinutes,
     )
-    const pushed = changed === 'start' ? next.end !== endHour : next.start !== startHour
-    setStartHour(next.start)
-    setEndHour(next.end)
+    const pushed = changed === 'start' ? next.end !== endMinutes : next.start !== startMinutes
+    setStartMinutes(next.start)
+    setEndMinutes(next.end)
     if (pushed) {
       setRangeHint(true)
       window.setTimeout(() => setRangeHint(false), 2500)
@@ -133,7 +174,7 @@ export default function CreateEventForm() {
       if (selectedDates.length === 0) {
         throw new Error('Pick at least one date')
       }
-      if (!datesOnly && startHour >= endHour) {
+      if (!datesOnly && startMinutes >= endMinutes) {
         throw new Error('Latest must be after earliest')
       }
       const dates = [...selectedDates]
@@ -143,11 +184,12 @@ export default function CreateEventForm() {
         name,
         mode: 'specific_dates',
         dates,
-        timeRange: datesOnly ? { start: 0, end: 24 } : { start: startHour, end: endHour },
+        timeRange: datesOnly ? { start: 0, end: 24 } : { start: startMinutes / 60, end: endMinutes / 60 },
         slotMinutes: datesOnly ? 60 : slotMinutes,
         timezone,
         datesOnly,
         location: location.trim() || undefined,
+        description: description.trim() || undefined,
       })
       navigate(`/e/${slug}`)
     } catch (err: unknown) {
@@ -158,30 +200,38 @@ export default function CreateEventForm() {
     }
   }
 
-  const renderQuickRow = (anchor: Date) => (
-    <div key={anchor.getTime()} className="flex items-center gap-2 text-xs flex-wrap">
-      <span className="text-ink-muted w-16 shrink-0">{format(anchor, 'MMMM')}:</span>
-      {(['all', 'weekdays', 'weekends'] as const).map((cat) => (
-        <button
-          key={cat}
-          type="button"
-          onClick={() => selectInMonth(anchor, cat)}
-          className="text-primary font-bold hover:underline capitalize"
-        >
-          {cat}
-        </button>
-      ))}
-      {selectedDates.some((d) => isSameMonth(d, anchor)) && (
-        <button
-          type="button"
-          onClick={() => setSelectedDates((prev) => prev.filter((d) => !isSameMonth(d, anchor)))}
-          className="text-danger font-bold hover:underline"
-        >
-          Clear
-        </button>
-      )}
-    </div>
-  )
+  // Merged into the same row as each month's bold "Month YYYY" caption
+  // (react-day-picker v9's MonthCaption override), replacing the old
+  // separate grey quick-select row above the calendar.
+  const MonthCaption = ({ calendarMonth }: MonthCaptionProps) => {
+    const anchor = calendarMonth.date
+    return (
+      <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mb-2 px-1">
+        <span className="text-base font-extrabold">{format(anchor, 'MMMM yyyy')}</span>
+        <div className="flex items-center gap-2 text-xs flex-wrap">
+          {(['all', 'weekdays', 'weekends'] as const).map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => selectInMonth(anchor, cat)}
+              className="text-primary font-bold hover:underline capitalize"
+            >
+              {cat}
+            </button>
+          ))}
+          {selectedDates.some((d) => isSameMonth(d, anchor)) && (
+            <button
+              type="button"
+              onClick={() => setSelectedDates((prev) => prev.filter((d) => !isSameMonth(d, anchor)))}
+              className="text-danger font-bold hover:underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // Clickable Mon–Sun titles inside the calendar itself. v9 passes no date
   // context to `components.Weekday`, so the column (position among header
@@ -233,7 +283,7 @@ export default function CreateEventForm() {
 
   const summaryLabel = datesOnly
     ? `Dates only · ${timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone}`
-    : `${formatHour(startHour)} – ${formatHour(endHour)} · ${slotMinutes} min · ${
+    : `${formatMinutesLabel(startMinutes)} – ${formatMinutesLabel(endMinutes)} · ${slotMinutes} min · ${
         timezone.split('/').pop()?.replace(/_/g, ' ') ?? timezone
       }`
 
@@ -253,35 +303,103 @@ export default function CreateEventForm() {
         placeholder="Pizza night, team sync, book club…"
       />
 
-      <TextField
-        id="event-location"
-        label="📍 Location (optional)"
-        value={location}
-        onChange={(e) => setLocation(e.target.value)}
-        placeholder="Where's it happening? (optional)"
-        maxLength={200}
-      />
+      <div className="bg-line/40 rounded-[12px]">
+        <button
+          type="button"
+          onClick={() => setOptionalOpen((v) => !v)}
+          aria-expanded={optionalOpen}
+          className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-bold text-ink-muted"
+        >
+          <span>
+            📍📝 Location &amp; description (optional)
+            {(location.trim() || description.trim()) && (
+              <span className="text-primary ml-1.5" aria-hidden="true">●</span>
+            )}
+          </span>
+          <span aria-hidden="true">{optionalOpen ? '▴' : '▾'}</span>
+        </button>
+        <AnimatePresence initial={false}>
+          {optionalOpen && (
+            <motion.div
+              key="optional-fields"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: 'easeInOut' }}
+              className="overflow-hidden"
+            >
+              <div className="px-4 pb-4 space-y-3">
+                <TextField
+                  id="event-location"
+                  label="📍 Location (optional)"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Where's it happening? (optional)"
+                  maxLength={200}
+                />
+                <div>
+                  <label
+                    htmlFor="event-description"
+                    className="block text-[10px] font-extrabold uppercase tracking-widest text-ink-muted mb-1.5"
+                  >
+                    📝 Description (optional)
+                  </label>
+                  <textarea
+                    id="event-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Any extra details voters should know…"
+                    maxLength={1000}
+                    rows={3}
+                    className="w-full bg-raised border-[1.5px] border-line rounded-[12px] px-4 py-3 text-ink placeholder:text-ink-muted focus:outline-2 focus:outline-primary resize-none"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       <Card>
-        <SegmentedControl
-          className="max-w-[260px] mb-3"
-          options={[
-            { value: 'days', label: 'Pick days' },
-            { value: 'range', label: 'Date range' },
-          ]}
-          value={pickMode}
-          onChange={(v) => {
-            setPickMode(v)
-            setRangeDraft(undefined)
-          }}
-        />
-        {/* One quick-select row per VISIBLE month, aligned above its month column. */}
-        <div className={`mb-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
-          {visibleMonths.map((m) => (
-            <div key={m.getTime()} className="flex justify-center">
-              {renderQuickRow(m)}
-            </div>
-          ))}
+        <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+          <Button
+            type="button"
+            variant={pickMode === 'range' ? 'primary' : 'secondary'}
+            size="sm"
+            aria-pressed={pickMode === 'range'}
+            onClick={() => {
+              setPickMode(pickMode === 'range' ? 'days' : 'range')
+              setRangeDraft(undefined)
+            }}
+            title={
+              pickMode === 'range'
+                ? 'Pick a start and end date — reverts to single-day picking once the range is complete'
+                : 'Turn on to select a whole date range in one go, instead of picking days one at a time'
+            }
+          >
+            📆 Date range mode
+          </Button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={goToPrevMonth}
+              disabled={!canGoPrevMonth}
+              aria-label="Previous month"
+              title="Previous month"
+              className="w-8 h-8 rounded-full border border-line bg-surface text-ink-muted hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={goToNextMonth}
+              aria-label="Next month"
+              title="Next month"
+              className="w-8 h-8 rounded-full border border-line bg-surface text-ink-muted hover:text-ink flex items-center justify-center"
+            >
+              ›
+            </button>
+          </div>
         </div>
         <div className="rdp-side-by-side">
           {pickMode === 'days' ? (
@@ -295,7 +413,7 @@ export default function CreateEventForm() {
               disabled={{ before: today }}
               startMonth={today}
               showWeekNumber
-              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader }}
+              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader, MonthCaption, Nav: () => <></> }}
             />
           ) : (
             <DayPicker
@@ -324,7 +442,7 @@ export default function CreateEventForm() {
               disabled={{ before: today }}
               startMonth={today}
               showWeekNumber
-              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader }}
+              components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader, MonthCaption, Nav: () => <></> }}
             />
           )}
         </div>
@@ -405,99 +523,145 @@ export default function CreateEventForm() {
           <span>⚙ {summaryLabel}</span>
           <span aria-hidden="true">{advancedOpen ? '▴' : '▾'}</span>
         </button>
-        {advancedOpen && !datesOnly && (
-          <div className="px-4 pb-4 space-y-3">
-            {
-              isMobile ? (
-                <div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Earliest</span>
-                      <WheelPicker
-                        ariaLabel="Earliest hour"
-                        options={HOURS_START}
-                        value={startHour}
-                        onChange={(v) => changeHours('start', v)}
-                      />
+        <AnimatePresence initial={false}>
+          {advancedOpen && !datesOnly && (
+            <motion.div
+              key="advanced-settings"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: 'easeInOut' }}
+              className="overflow-hidden"
+            >
+              <div className="px-4 pb-4 space-y-3">
+                {isMobile ? (
+                  <div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Earliest</span>
+                        <WheelPicker
+                          ariaLabel="Earliest time"
+                          options={startTimeOptions}
+                          value={startMinutes}
+                          onChange={(v) => changeMinutes('start', v)}
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Latest</span>
+                        <WheelPicker
+                          ariaLabel="Latest time"
+                          options={endTimeOptions}
+                          value={endMinutes}
+                          onChange={(v) => changeMinutes('end', v)}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <span className="block text-xs font-bold text-ink-muted mb-1 text-center">Latest</span>
-                      <WheelPicker
-                        ariaLabel="Latest hour"
-                        options={HOURS_END}
-                        value={endHour}
-                        onChange={(v) => changeHours('end', v)}
-                      />
-                    </div>
+                    {rangeHint && (
+                      <p className="text-xs text-ink-muted mt-1 text-center">
+                        Adjusted — the window must be at least {slotMinutes} min.
+                      </p>
+                    )}
                   </div>
-                  {rangeHint && (
-                    <p className="text-xs text-ink-muted mt-1 text-center">
-                      Adjusted — the window must be at least 1 hour.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label htmlFor="start-hour" className="block text-xs font-bold text-ink-muted mb-1">Earliest</label>
-                      <ScrollSelect
-                        id="start-hour"
-                        ariaLabel="Earliest hour"
-                        options={HOURS_START}
-                        value={startHour}
-                        onChange={(v) => changeHours('start', v)}
-                      />
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold text-ink-muted">Earliest – Latest</span>
+                      <span className="text-xs font-bold text-ink">
+                        {formatMinutesLabel(startMinutes)} – {formatMinutesLabel(endMinutes)}
+                      </span>
                     </div>
-                    <div>
-                      <label htmlFor="end-hour" className="block text-xs font-bold text-ink-muted mb-1">Latest</label>
-                      <ScrollSelect
-                        id="end-hour"
-                        ariaLabel="Latest hour"
-                        options={HOURS_END}
-                        value={endHour}
-                        onChange={(v) => changeHours('end', v)}
-                      />
+                    <DualRangeSlider
+                      min={0}
+                      max={1440}
+                      step={slotMinutes}
+                      startValue={startMinutes}
+                      endValue={endMinutes}
+                      onStartChange={(v) => changeMinutes('start', v)}
+                      onEndChange={(v) => changeMinutes('end', v)}
+                      ariaLabelStart="Earliest time"
+                      ariaLabelEnd="Latest time"
+                    />
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <label htmlFor="start-time-input" className="block text-xs font-bold text-ink-muted mb-1">
+                          Earliest
+                        </label>
+                        <input
+                          id="start-time-input"
+                          type="time"
+                          step={slotMinutes * 60}
+                          value={minutesToTimeInputValue(startMinutes)}
+                          onChange={(e) => {
+                            const v = timeInputValueToMinutes(e.target.value)
+                            if (v !== null) changeMinutes('start', v)
+                          }}
+                          className={hourSelectClass}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="end-time-input" className="block text-xs font-bold text-ink-muted mb-1">
+                          Latest
+                        </label>
+                        <input
+                          id="end-time-input"
+                          type="time"
+                          step={slotMinutes * 60}
+                          value={minutesToTimeInputValue(endMinutes)}
+                          onChange={(e) => {
+                            const v = timeInputValueToMinutes(e.target.value)
+                            if (v !== null) changeMinutes('end', v)
+                          }}
+                          className={hourSelectClass}
+                        />
+                      </div>
                     </div>
+                    {rangeHint && (
+                      <p className="text-xs text-ink-muted mt-1">
+                        Adjusted — the window must be at least {slotMinutes} min.
+                      </p>
+                    )}
                   </div>
-                  {rangeHint && (
-                    <p className="text-xs text-ink-muted mt-1">
-                      Adjusted — the window must be at least 1 hour.
-                    </p>
-                  )}
+                )}
+                <div>
+                  <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
+                  <SegmentedControl
+                    options={[
+                      { value: '15', label: '15 min' },
+                      { value: '30', label: '30 min' },
+                      { value: '60', label: '1 hour' },
+                    ]}
+                    value={String(slotMinutes) as '15' | '30' | '60'}
+                    onChange={(v) => {
+                      const nextStep = Number(v) as 15 | 30 | 60
+                      setSlotMinutes(nextStep)
+                      // Re-snap both bounds so they stay valid under the new granularity
+                      // (e.g. a 9:15 boundary set at 15-min slots isn't valid at 60-min slots).
+                      const snap = (n: number) => Math.round(n / nextStep) * nextStep
+                      setStartMinutes((prev) => Math.min(1440 - nextStep, Math.max(0, snap(prev))))
+                      setEndMinutes((prev) => Math.max(nextStep, Math.min(1440, snap(prev))))
+                    }}
+                  />
                 </div>
-              )
-            }
-            <div>
-              <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
-              <SegmentedControl
-                options={[
-                  { value: '15', label: '15 min' },
-                  { value: '30', label: '30 min' },
-                  { value: '60', label: '1 hour' },
-                ]}
-                value={String(slotMinutes) as '15' | '30' | '60'}
-                onChange={(v) => setSlotMinutes(Number(v) as 15 | 30 | 60)}
-              />
-            </div>
-            <div>
-              <label htmlFor="event-tz" className="block text-xs font-bold text-ink-muted mb-1">Time zone</label>
-              <div className="flex gap-2">
-                <select id="event-tz" value={timezone} onChange={(e) => setTimezone(e.target.value)} className={hourSelectClass}>
-                  {tzOptions.map((tz) => (
-                    <option key={tz} value={tz}>
-                      {formatTimezoneLabel(tz)}
-                      {tz === detectedTz ? ' — your timezone' : ''}
-                    </option>
-                  ))}
-                </select>
-                <Button variant="secondary" size="sm" type="button" onClick={() => setTimezone(detectedTz)}>
-                  Detect
-                </Button>
+                <div>
+                  <label htmlFor="event-tz" className="block text-xs font-bold text-ink-muted mb-1">Time zone</label>
+                  <div className="flex gap-2">
+                    <select id="event-tz" value={timezone} onChange={(e) => setTimezone(e.target.value)} className={hourSelectClass}>
+                      {tzOptions.map((tz) => (
+                        <option key={tz} value={tz}>
+                          {formatTimezoneLabel(tz)}
+                          {tz === detectedTz ? ' — your timezone' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <Button variant="secondary" size="sm" type="button" onClick={() => setTimezone(detectedTz)}>
+                      Detect
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {error && <p className="text-danger text-sm">{error}</p>}

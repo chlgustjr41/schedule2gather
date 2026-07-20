@@ -6,6 +6,7 @@ import { loadParticipantsForEvent } from '@/lib/participantId'
 import { setOwnerEmail, touchLastVisited } from '@/services/eventService'
 import { registerPresence, subscribeToPresence } from '@/services/presenceService'
 import JoinScreen from '@/components/JoinScreen'
+import EditEventSheet from '@/components/EditEventSheet'
 import AvailabilityGrid from '@/components/AvailabilityGrid'
 import EventNotFound from '@/components/EventNotFound'
 import HostBadge from '@/components/HostBadge'
@@ -39,6 +40,7 @@ export default function EventPage() {
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   )
   const [presentIds, setPresentIds] = useState<Set<string>>(() => new Set())
+  const [showEdit, setShowEdit] = useState(false)
   // useReducer instead of useState: the project's react-hooks/set-state-in-effect
   // lint rule rejects setState calls inside effects. A reducer dispatch is allowed.
   const [namePrompt, setNamePrompt] = useReducer(
@@ -119,13 +121,29 @@ export default function EventPage() {
           <>
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between max-w-5xl mx-auto mt-4 mb-4 gap-3">
               <div className="min-w-0">
-                <h1 className="text-2xl font-extrabold break-words">{event.name}</h1>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-2xl font-extrabold break-words">{event.name}</h1>
+                  <button
+                    type="button"
+                    onClick={() => setShowEdit(true)}
+                    title="Edit event name, location, or description"
+                    aria-label="Edit event name, location, or description"
+                    className="text-ink-muted hover:text-ink text-sm shrink-0"
+                  >
+                    ✏️
+                  </button>
+                </div>
                 <p className="text-sm text-ink-muted mt-0.5">
                   {event.dates.length} {event.mode === 'weekdays_recurring' ? 'weekdays' : 'dates'} ·{' '}
                   {event.slotMinutes} min slots
                 </p>
                 {event.location && (
                   <p className="text-sm text-ink-muted mt-0.5">📍 {event.location}</p>
+                )}
+                {event.description && (
+                  <p className="text-sm text-ink-muted mt-1 whitespace-pre-wrap break-words">
+                    {event.description}
+                  </p>
                 )}
                 {participants.length > 0 && (
                   <div className="flex items-center mt-2">
@@ -183,6 +201,15 @@ export default function EventPage() {
                 isHost={isHost}
                 viewerUid={user?.uid ?? null}
                 votingClosed={finalized !== null}
+              />
+            )}
+            {showEdit && slug && (
+              <EditEventSheet
+                slug={slug}
+                name={event.name}
+                location={event.location ?? ''}
+                description={event.description ?? ''}
+                onClose={() => setShowEdit(false)}
               />
             )}
           </>
