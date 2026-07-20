@@ -75,6 +75,7 @@ export default function WheelPicker({ options, value, onChange, ariaLabel }: Whe
         ref={scrollRef}
         role="listbox"
         aria-label={ariaLabel}
+        title={`Scroll to choose ${ariaLabel.toLowerCase()}`}
         onScroll={onScroll}
         className="h-[200px] overflow-y-auto snap-y snap-mandatory overscroll-contain rounded-[14px] bg-surface border border-line"
         style={{ scrollbarWidth: 'none' }}

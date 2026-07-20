@@ -75,6 +75,7 @@ export default function SignInButton({ onSignedIn }: SignInButtonProps) {
         onClick={handleSignOut}
         disabled={busy}
         className="text-xs text-ink-muted hover:text-ink underline disabled:opacity-50"
+        title="Sign out of your account"
       >
         Sign out
       </button>

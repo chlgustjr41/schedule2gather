@@ -25,6 +25,7 @@ export default function TimezonePicker({ value, onChange }: TimezonePickerProps)
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="border rounded-[12px] px-2 py-1 text-sm max-w-[260px]"
+        title="Choose the timezone you're viewing times in"
       >
         {options.map((tz) => (
           <option key={tz} value={tz}>

@@ -63,6 +63,7 @@ export default function ScrollSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
+        title={ariaLabel}
         onClick={() => setOpen((v) => !v)}
         className="w-full bg-raised border-[1.5px] border-line rounded-[12px] px-3 py-2 text-sm text-ink text-left flex items-center justify-between"
       >
