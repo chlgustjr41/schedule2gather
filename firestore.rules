@@ -44,5 +44,10 @@ service cloud.firestore {
         allow read, write: if false;
       }
     }
+
+    // Written only by the submitFeedback callable (Admin SDK, bypasses rules).
+    match /feedbackLimits/{uid} {
+      allow read, write: if false;
+    }
   }
 }
