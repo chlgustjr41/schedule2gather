@@ -46,8 +46,9 @@ export function computeSlotCount(input: CreateEventInput): number {
   return input.dates.length * computeSlotsPerDay(input.timeRange, input.slotMinutes)
 }
 
-function isInteger(n: unknown): n is number {
-  return typeof n === 'number' && Number.isInteger(n)
+/** True for a finite number that's a whole multiple of 15 minutes when expressed in hours. */
+function isQuarterHour(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n) && Math.round(n * 4) === n * 4
 }
 
 function isValidIANATimezone(tz: string): boolean {
@@ -110,19 +111,21 @@ export function validateCreateEventInput(input: unknown): asserts input is Creat
     }
   }
 
-  // timeRange
+  // timeRange — hours, allowing quarter-hour precision (e.g. 9.25 = 9:15) so the
+  // boundary can land on any 15-minute mark; slotMinutes (validated below) must
+  // still evenly divide the resulting duration.
   if (!i.timeRange || typeof i.timeRange !== 'object') {
     throw new ValidationError('timeRange must be an object')
   }
   const tr = i.timeRange as { start?: unknown; end?: unknown }
-  if (!isInteger(tr.start) || !isInteger(tr.end)) {
-    throw new ValidationError('timeRange.start and end must be integers')
+  if (!isQuarterHour(tr.start) || !isQuarterHour(tr.end)) {
+    throw new ValidationError('timeRange.start and end must be in 15-minute increments')
   }
-  if (tr.start < 0 || tr.start > 23) {
-    throw new ValidationError('timeRange.start must be 0-23')
+  if (tr.start < 0 || tr.start >= 24) {
+    throw new ValidationError('timeRange.start must be 0-23.75')
   }
-  if (tr.end < 1 || tr.end > 24) {
-    throw new ValidationError('timeRange.end must be 1-24')
+  if (tr.end <= 0 || tr.end > 24) {
+    throw new ValidationError('timeRange.end must be 0.25-24')
   }
   if (tr.end <= tr.start) {
     throw new ValidationError('timeRange.end must be greater than timeRange.start')
@@ -131,6 +134,13 @@ export function validateCreateEventInput(input: unknown): asserts input is Creat
   // slotMinutes
   if (!SLOT_MINUTES.includes(i.slotMinutes as (typeof SLOT_MINUTES)[number])) {
     throw new ValidationError(`slotMinutes must be one of: ${SLOT_MINUTES.join(', ')}`)
+  }
+  const slotMinutes = i.slotMinutes as (typeof SLOT_MINUTES)[number]
+  const durationMinutes = Math.round((tr.end - tr.start) * 60)
+  if (durationMinutes % slotMinutes !== 0) {
+    throw new ValidationError(
+      `timeRange duration (${durationMinutes} min) must be a whole multiple of slotMinutes (${slotMinutes})`,
+    )
   }
 
   // datesOnly (optional) — `!= null` (not `!== undefined`) because the callable

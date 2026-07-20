@@ -102,6 +102,12 @@ describe('timezoneSlots', () => {
       expect(formatSlotTimeLabel(nyEvent, 1, 'America/New_York')).toBe('09:30')
     })
 
+    it('fractional-hour start (9:15) formats slot 0 as "09:15"', () => {
+      const quarterHourEvent: EventForLabels = { ...nyEvent, timeRange: { start: 9.25, end: 17.5 } }
+      expect(formatSlotTimeLabel(quarterHourEvent, 0, 'America/New_York')).toBe('09:15')
+      expect(formatSlotTimeLabel(quarterHourEvent, 1, 'America/New_York')).toBe('09:45')
+    })
+
     it('cross-TZ (NY 9 AM EDT, LA viewer PDT): "06:00"', () => {
       // 9:00 EDT = 13:00 UTC = 06:00 PDT
       expect(formatSlotTimeLabel(nyEvent, 0, 'America/Los_Angeles')).toBe('06:00')
