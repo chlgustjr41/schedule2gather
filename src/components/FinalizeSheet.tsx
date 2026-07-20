@@ -21,6 +21,7 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
   const [customDate, setCustomDate] = useState(0)
   const [customStart, setCustomStart] = useState(0)
   const [customSlots, setCustomSlots] = useState(2)
+  const [location, setLocation] = useState(event?.location ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -68,7 +69,7 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
     setSaving(true)
     setError(null)
     try {
-      await finalizeEvent(slug, w)
+      await finalizeEvent(slug, w, location.trim() || undefined)
       onClose()
     } catch {
       setError("Couldn't save — try again")
@@ -140,6 +141,20 @@ export default function FinalizeSheet({ slug, viewerTimezone, onClose }: Finaliz
             )}
           </div>
         )}
+        <div>
+          <label htmlFor="finalize-location" className="block text-xs font-bold text-ink-muted mb-1">
+            📍 Location (optional)
+          </label>
+          <input
+            id="finalize-location"
+            type="text"
+            maxLength={200}
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="Where's it happening? (optional)"
+            className={selectClass}
+          />
+        </div>
         {error && <p className="text-sm text-danger">{error}</p>}
         <Button size="lg" onClick={() => void handleFinish()} disabled={saving || resolveWindow() === null} className="mt-2">
           {saving ? 'Saving…' : '🏁 Finish vote'}

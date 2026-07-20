@@ -3,6 +3,9 @@ import { useAuthStore } from '@/stores/authStore'
 import Button from '@/components/ui/Button'
 import ThemeToggle from '@/components/ui/ThemeToggle'
 import Wordmark from '@/components/ui/Wordmark'
+// Bug/feature feedback entry point is disabled for now — pending GITHUB_TOKEN
+// provisioning. FeedbackModal/feedbackService/submitFeedback are left in place
+// to re-enable later; just re-add the button + state + import removed here.
 
 interface AppHeaderProps {
   /** Width constraint matching the page body, e.g. "max-w-2xl" | "max-w-5xl". */

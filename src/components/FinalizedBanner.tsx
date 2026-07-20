@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useEventStore } from '@/stores/eventStore'
 import { unpack } from '@/lib/bitmap'
 import { windowUtcRange, formatWindowLabel } from '@/lib/ics'
+import { buildAnnouncementText } from '@/lib/announcement'
 import { reopenEvent } from '@/services/eventService'
 import ExportSheet from '@/components/ExportSheet'
 import Button from '@/components/ui/Button'
@@ -19,6 +20,7 @@ export default function FinalizedBanner({ slug, isHost, viewerTimezone, shareUrl
   const participants = useEventStore((s) => s.participants)
   const [showExport, setShowExport] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const attendance = useMemo(() => {
     if (!event?.finalized) return 0
@@ -37,6 +39,7 @@ export default function FinalizedBanner({ slug, isHost, viewerTimezone, shareUrl
   const { startSlot, endSlot } = event.finalized
   const range = windowUtcRange(event, { startSlot, endSlot })
   const label = range ? formatWindowLabel(event, { startSlot, endSlot }, viewerTimezone) : ''
+  const announcementText = buildAnnouncementText(event, { startSlot, endSlot }, viewerTimezone, shareUrl)
 
   const handleReopen = async () => {
     setError(null)
@@ -44,6 +47,16 @@ export default function FinalizedBanner({ slug, isHost, viewerTimezone, shareUrl
       await reopenEvent(slug)
     } catch {
       setError("Couldn't reopen — try again")
+    }
+  }
+
+  const handleCopyAnnouncement = async () => {
+    try {
+      await navigator.clipboard.writeText(announcementText)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // clipboard can fail (permissions) — silently ignore, button just won't show "Copied"
     }
   }
 
@@ -66,6 +79,25 @@ export default function FinalizedBanner({ slug, isHost, viewerTimezone, shareUrl
           )}
         </div>
       </div>
+      {isHost && (
+        <div className="mt-3 pt-3 border-t border-line">
+          <div className="text-[10px] font-extrabold uppercase tracking-widest text-ink-muted mb-1.5">
+            📣 Announce to the group
+          </div>
+          <p className="text-sm whitespace-pre-line bg-raised border border-line rounded-[12px] p-3">
+            {announcementText}
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-2"
+            onClick={() => void handleCopyAnnouncement()}
+            title="Copy this announcement to your clipboard"
+          >
+            {copied ? 'Copied ✓' : 'Copy announcement'}
+          </Button>
+        </div>
+      )}
       {error && <p className="text-sm text-danger mt-2">{error}</p>}
       {showExport && (
         <ExportSheet

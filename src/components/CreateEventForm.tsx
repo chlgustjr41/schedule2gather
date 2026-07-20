@@ -22,6 +22,7 @@ import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import ScrollSelect from '@/components/ui/ScrollSelect'
 import SegmentedControl from '@/components/ui/SegmentedControl'
+import Switch from '@/components/ui/Switch'
 import TextField from '@/components/ui/TextField'
 import WheelPicker from '@/components/ui/WheelPicker'
 
@@ -47,6 +48,7 @@ export default function CreateEventForm() {
   const [error, setError] = useState<string | null>(null)
 
   const [name, setName] = useState('')
+  const [location, setLocation] = useState('')
   const [startHour, setStartHour] = useState(9)
   const [endHour, setEndHour] = useState(21)
   const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(30)
@@ -145,6 +147,7 @@ export default function CreateEventForm() {
         slotMinutes: datesOnly ? 60 : slotMinutes,
         timezone,
         datesOnly,
+        location: location.trim() || undefined,
       })
       navigate(`/e/${slug}`)
     } catch (err: unknown) {
@@ -250,6 +253,15 @@ export default function CreateEventForm() {
         placeholder="Pizza night, team sync, book club…"
       />
 
+      <TextField
+        id="event-location"
+        label="📍 Location (optional)"
+        value={location}
+        onChange={(e) => setLocation(e.target.value)}
+        placeholder="Where's it happening? (optional)"
+        maxLength={200}
+      />
+
       <Card>
         <SegmentedControl
           className="max-w-[260px] mb-3"
@@ -263,18 +275,6 @@ export default function CreateEventForm() {
             setRangeDraft(undefined)
           }}
         />
-        <div className="mt-2 mb-3">
-          <span className="block text-xs font-bold text-ink-muted mb-1">Ask voters for</span>
-          <SegmentedControl
-            className="max-w-[280px]"
-            options={[
-              { value: 'times', label: '⏰ Specific times', title: 'Voters paint the hours they’re free' },
-              { value: 'dates', label: '📅 Dates only', title: 'Voters just mark which days they’re free — no hourly grid' },
-            ]}
-            value={datesOnly ? 'dates' : 'times'}
-            onChange={(v) => setDatesOnly(v === 'dates')}
-          />
-        </div>
         {/* One quick-select row per VISIBLE month, aligned above its month column. */}
         <div className={`mb-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
           {visibleMonths.map((m) => (
@@ -315,6 +315,8 @@ export default function CreateEventForm() {
                   const to = range.to
                   setSelectedDates((prev) => mergeRangeIntoDates(prev, from, to, today))
                   setRangeDraft(undefined)
+                  // One-shot: a completed range hands control back to individual-day picking.
+                  setPickMode('days')
                 } else {
                   setRangeDraft(range)
                 }
@@ -350,11 +352,11 @@ export default function CreateEventForm() {
               Clear all
             </button>
           </div>
-          <ul className="max-h-40 overflow-y-auto divide-y divide-line">
+          <ul className="max-h-40 overflow-y-auto pr-1 divide-y divide-line">
             {[...selectedDates]
               .sort((a, b) => a.getTime() - b.getTime())
               .map((d) => (
-                <li key={d.toDateString()} className="flex items-center justify-between px-1 py-1.5 text-sm">
+                <li key={d.toDateString()} className="flex items-center justify-between gap-2 pl-1 pr-3 py-1 text-sm">
                   <span className="font-bold">{format(d, 'EEE, MMM d')}</span>
                   <button
                     type="button"
@@ -362,7 +364,7 @@ export default function CreateEventForm() {
                     onClick={() =>
                       setSelectedDates((prev) => prev.filter((x) => x.toDateString() !== d.toDateString()))
                     }
-                    className="text-ink-muted hover:text-danger px-1"
+                    className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full text-base text-ink-muted hover:text-danger hover:bg-raised"
                   >
                     ×
                   </button>
@@ -373,18 +375,39 @@ export default function CreateEventForm() {
       )}
 
       <div className="bg-line/40 rounded-[12px]">
+        <div className="flex justify-start px-4 pt-2">
+          <Switch
+            checked={datesOnly}
+            onChange={setDatesOnly}
+            label="📅 Date only"
+            title={
+              datesOnly
+                ? 'Voters mark which days they’re free — no hourly grid. Tap to bring back time selection.'
+                : 'Skip hourly time selection — voters just mark which days work'
+            }
+          />
+        </div>
+        {datesOnly && (
+          <p className="px-4 pt-1 text-xs text-ink-muted">
+            Time-slot voting is off — voters will only pick which days work.
+          </p>
+        )}
         <button
           type="button"
           onClick={() => setAdvancedOpen((v) => !v)}
+          disabled={datesOnly}
           aria-expanded={advancedOpen}
-          className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-bold text-ink-muted"
+          title={datesOnly ? 'Not needed for date-only events' : undefined}
+          className={`w-full flex items-center justify-between px-4 py-1.5 text-sm font-bold text-ink-muted ${
+            datesOnly ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
         >
           <span>⚙ {summaryLabel}</span>
           <span aria-hidden="true">{advancedOpen ? '▴' : '▾'}</span>
         </button>
-        {advancedOpen && (
+        {advancedOpen && !datesOnly && (
           <div className="px-4 pb-4 space-y-3">
-            {!datesOnly && (
+            {
               isMobile ? (
                 <div>
                   <div className="grid grid-cols-2 gap-3">
@@ -444,21 +467,19 @@ export default function CreateEventForm() {
                   )}
                 </div>
               )
-            )}
-            {!datesOnly && (
-              <div>
-                <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
-                <SegmentedControl
-                  options={[
-                    { value: '15', label: '15 min' },
-                    { value: '30', label: '30 min' },
-                    { value: '60', label: '1 hour' },
-                  ]}
-                  value={String(slotMinutes) as '15' | '30' | '60'}
-                  onChange={(v) => setSlotMinutes(Number(v) as 15 | 30 | 60)}
-                />
-              </div>
-            )}
+            }
+            <div>
+              <span className="block text-xs font-bold text-ink-muted mb-1">Slot length</span>
+              <SegmentedControl
+                options={[
+                  { value: '15', label: '15 min' },
+                  { value: '30', label: '30 min' },
+                  { value: '60', label: '1 hour' },
+                ]}
+                value={String(slotMinutes) as '15' | '30' | '60'}
+                onChange={(v) => setSlotMinutes(Number(v) as 15 | 30 | 60)}
+              />
+            </div>
             <div>
               <label htmlFor="event-tz" className="block text-xs font-bold text-ink-muted mb-1">Time zone</label>
               <div className="flex gap-2">

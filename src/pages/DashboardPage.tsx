@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
+import { motion } from 'motion/react'
 import { useAuthStore } from '@/stores/authStore'
 import {
   countParticipants,
@@ -13,6 +14,15 @@ import AppHeader from '@/components/AppHeader'
 import BottomSheet from '@/components/ui/BottomSheet'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
+
+const listVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.04 } },
+}
+const itemVariants = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0 },
+}
 
 type Counts = Record<string, { joined: number; painted: number | null }>
 type LoadState =
@@ -242,11 +252,11 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
-            <ul className="space-y-3">
+            <motion.ul className="space-y-3" variants={listVariants} initial="hidden" animate="show">
               {state.events.map((ev) => {
                 const c = counts[ev.slug]
                 return (
-                  <li key={ev.slug}>
+                  <motion.li key={ev.slug} variants={itemVariants}>
                     <Card
                       className="cursor-pointer hover:bg-raised transition"
                       onClick={() => navigate(`/e/${ev.slug}`)}
@@ -325,10 +335,10 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     </Card>
-                  </li>
+                  </motion.li>
                 )
               })}
-            </ul>
+            </motion.ul>
           </>
         )}
 

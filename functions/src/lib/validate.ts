@@ -20,6 +20,10 @@ export interface CreateEventInput {
   timezone: string
   /** True when the host only wants date-level voting (no hourly grid). */
   datesOnly?: boolean
+  /** Optional venue/address, shown to voters and included in the finalize announcement. */
+  location?: string
+  /** True when `location` was confirmed via Places search — only then is it rendered as a map link. */
+  locationIsMapLink?: boolean
 }
 
 /**
@@ -130,6 +134,21 @@ export function validateCreateEventInput(input: unknown): asserts input is Creat
   // datesOnly (optional)
   if (i.datesOnly !== undefined && typeof i.datesOnly !== 'boolean') {
     throw new ValidationError('datesOnly must be a boolean')
+  }
+
+  // location (optional)
+  if (i.location !== undefined) {
+    if (typeof i.location !== 'string') {
+      throw new ValidationError('location must be a string')
+    }
+    if (i.location.trim().length > 200) {
+      throw new ValidationError('location must be 200 chars or fewer')
+    }
+  }
+
+  // locationIsMapLink (optional)
+  if (i.locationIsMapLink !== undefined && typeof i.locationIsMapLink !== 'boolean') {
+    throw new ValidationError('locationIsMapLink must be a boolean')
   }
 
   // timezone

@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
+import { motion } from 'motion/react'
 import {
   subscribeToComments,
   addComment,
   deleteComment,
   type CommentDoc,
 } from '@/services/commentService'
+
+const listVariants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.04 } },
+}
+const itemVariants = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0 },
+}
 
 interface CommentsPanelProps {
   slug: string
@@ -115,11 +125,15 @@ export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid, 
       {comments.length === 0 ? (
         <p className="text-sm text-ink-muted text-center py-4">No comments yet — say hi!</p>
       ) : (
-        <ul className="space-y-3">
+        <motion.ul className="space-y-3" variants={listVariants} initial="hidden" animate="show">
           {comments.map((c) => {
             const canDelete = isHost || (viewerUid !== null && c.uid === viewerUid)
             return (
-              <li key={c.id} className="bg-surface border border-line rounded-[12px] p-3">
+              <motion.li
+                key={c.id}
+                variants={itemVariants}
+                className="bg-surface border border-line rounded-[12px] p-3"
+              >
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="text-sm font-medium">{c.authorName}</div>
                   <div className="flex items-center gap-2">
@@ -145,10 +159,10 @@ export default function CommentsPanel({ slug, myParticipant, isHost, viewerUid, 
                   </div>
                 </div>
                 <p className="text-sm text-ink-muted mt-1 whitespace-pre-wrap break-words">{c.text}</p>
-              </li>
+              </motion.li>
             )
           })}
-        </ul>
+        </motion.ul>
       )}
     </section>
   )
