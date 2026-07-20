@@ -16,8 +16,6 @@ export interface ParticipantDoc {
   uid: string
   availability: string
   lastUpdated: { seconds: number; nanoseconds: number }
-  /** True when a passcode protects claiming this name (hash is server-side only). */
-  protected?: boolean
 }
 
 /**

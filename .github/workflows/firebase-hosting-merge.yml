@@ -88,19 +88,9 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SCHEDULE2GATHER }}
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Ensure Cloud Run public invoker on callables
+      - name: Ensure Cloud Run public invoker on createEvent
         run: |
           gcloud run services add-iam-policy-binding createevent \
-            --region=us-central1 \
-            --project=schedule2gather \
-            --member=allUsers \
-            --role=roles/run.invoker
-          gcloud run services add-iam-policy-binding deleteevent \
-            --region=us-central1 \
-            --project=schedule2gather \
-            --member=allUsers \
-            --role=roles/run.invoker
-          gcloud run services add-iam-policy-binding joinwithname \
             --region=us-central1 \
             --project=schedule2gather \
             --member=allUsers \

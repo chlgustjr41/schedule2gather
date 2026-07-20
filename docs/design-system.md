@@ -3,10 +3,7 @@
 The "Warm & Friendly" design system introduced in the 2026-07 redesign
 (`docs/superpowers/specs/2026-07-18-redesign-design.md` §2), extended by the v1.1 follow-up
 (`docs/superpowers/specs/2026-07-18-v1.1-followup-design.md`) with the group-first stacked layout
-and its new components, and by the v1.4 auth/join polish
-(`docs/superpowers/specs/2026-07-19-v1.4-auth-join-polish-design.md`) with the tinted header band,
-the circular icon-button convention, and the grid header-chip affordance (see "Header band & icon
-buttons" below). Tokens are CSS custom properties
+and its new components. Tokens are CSS custom properties
 declared in `src/index.css`; components consume them only through Tailwind v4 utility classes —
 there is no `dark:` variant anywhere in the codebase. Dark mode works by **reassigning the same
 custom properties** under `:root[data-theme="dark"]`, so every component that uses a token utility
@@ -145,40 +142,6 @@ render-blocking Google Fonts request.
   unconditionally, so the border *becomes* the elevation cue in dark mode without any conditional
   logic in the component.
 
-## Header band & icon buttons (v1.4)
-
-**Header band.** `AppHeader` (`src/components/AppHeader.tsx`) wraps its content row in a
-full-width tinted band: `bg-primary/10 border-b border-line` on the outer `<div>`, with the
-existing `max-w-*` content row nested inside. This is the first place in the app that uses
-`bg-primary/10` as a large-area wash rather than a small hover/active accent — it reads as a
-distinct warm strip against the plain `bg-canvas` page background in both themes, without needing
-any `dark:`-style conditional (the token substitution under `:root[data-theme="dark"]` handles it,
-per the "Token tables" section above). The band is **not** sticky — it scrolls with the page like
-the rest of the header always has.
-
-**Icon-button convention.** `AvailabilityGrid`'s Undo/Redo controls (`src/components/
-AvailabilityGrid.tsx`) are the first icon-only buttons in the app and establish the convention for
-any future ones: a **circular `w-9 h-9` button**, glyph-only content (`↺`/`↻`, no visible text),
-`rounded-full border border-line bg-surface text-ink-muted`, `hover:text-ink` for the hover state,
-and `disabled:opacity-40 disabled:cursor-not-allowed` for the exhausted-history state — paired with
-both `title` and `aria-label` carrying the same hotkey hint (`Undo (Ctrl+Z)` / `Redo
-(Ctrl+Shift+Z)`, `⌘Z`/`⌘⇧Z` on Mac) so the accessible name and the mouse-hover tooltip never drift
-apart. Visually this is deliberately distinct from the pill-shaped `Button` primitive used for
-`Mark all available` / `Clear all` / `Week`/`Month` next to it — the `ml-auto` grouping plus the
-circular shape signal "these two are a paired history control," not another item in the action-pill
-row. Follow this shape (`w-9 h-9 rounded-full`, `title` + matching `aria-label`, `disabled:
-opacity-40`) for any future icon-only control; text-bearing actions should keep using `Button`.
-
-**Header-chip affordance.** `AvailabilityGrid`'s day-column and time-row headers render their label
-text inside a small chip rather than as bare text, when the grid is interactive: `bg-raised border
-border-line rounded-[8px] px-1.5 py-0.5 active:bg-primary/20 select-none`. This borrows the `rounded-
-[12px]`-family control language (see "Shape & elevation" above) at a smaller radius to read as a
-tappable pill within the cramped header cell, and the `active:bg-primary/20` press state gives
-touch users the same tap feedback the grid cells themselves already have. `readOnly` grids render
-the same header text unchipped (no wrapping `<span>`, no border/background classes) since there's
-nothing to tap once painting is closed — the chip is reserved for genuinely interactive headers,
-not applied unconditionally as decoration.
-
 ## Primitives reference (`src/components/ui/`)
 
 ### `Button.tsx`
@@ -292,15 +255,16 @@ dot with `aria-label="{name} is here now"`.
 Label (if given) renders as an uppercase micro-label above the input.
 
 ```tsx
-// src/components/JoinScreen.tsx (v1.4: new-name field, label omitted — the
-// section heading above it already reads "Or join as a new name" / "Join in")
+// src/components/JoinScreen.tsx
 <TextField
   id="join-name"
+  label="Join in"
   type="text"
+  autoFocus
   required
   maxLength={79}
-  value={newName}
-  onChange={(e) => setNewName(e.target.value)}
+  value={name}
+  onChange={(e) => setName(e.target.value)}
   placeholder="Your name"
 />
 ```

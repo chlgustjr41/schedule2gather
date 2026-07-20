@@ -187,51 +187,13 @@ export default function CreateEventForm() {
           }}
         />
         {/* One quick-select row per VISIBLE month, aligned above its month column. */}
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <div className={`flex-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
-            {visibleMonths.map((m) => (
-              <div key={m.getTime()} className="flex justify-center">
-                {renderQuickRow(m)}
-              </div>
-            ))}
-          </div>
-          <div className="shrink-0 text-xs text-ink-muted text-right">
-            {selectedDates.length} selected
-            {selectedDates.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedDates([])
-                  setRangeDraft(undefined)
-                }}
-                className="ml-2 underline hover:text-ink"
-              >
-                Clear all
-              </button>
-            )}
-          </div>
+        <div className={`mb-1 ${isMobile ? 'flex justify-center' : 'grid grid-cols-2'}`}>
+          {visibleMonths.map((m) => (
+            <div key={m.getTime()} className="flex justify-center">
+              {renderQuickRow(m)}
+            </div>
+          ))}
         </div>
-        {selectedDates.length > 0 && (
-          <ul className="mb-2 max-h-40 overflow-y-auto divide-y divide-line rounded-[12px] border border-line bg-raised/40">
-            {[...selectedDates]
-              .sort((a, b) => a.getTime() - b.getTime())
-              .map((d) => (
-                <li key={d.toDateString()} className="flex items-center justify-between px-3 py-1.5 text-sm">
-                  <span className="font-bold">{format(d, 'EEE, MMM d')}</span>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${format(d, 'MMM d')}`}
-                    onClick={() =>
-                      setSelectedDates((prev) => prev.filter((x) => x.toDateString() !== d.toDateString()))
-                    }
-                    className="text-ink-muted hover:text-danger px-1"
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-          </ul>
-        )}
         <div className="rdp-side-by-side">
           {pickMode === 'days' ? (
             <DayPicker
@@ -271,6 +233,45 @@ export default function CreateEventForm() {
             />
           )}
         </div>
+        {selectedDates.length > 0 && (
+          <div className={`mt-2 flex gap-1.5 ${isMobile ? 'overflow-x-auto flex-nowrap pb-1' : 'flex-wrap'}`}>
+            {[...selectedDates]
+              .sort((a, b) => a.getTime() - b.getTime())
+              .map((d) => (
+                <span
+                  key={d.toDateString()}
+                  className="shrink-0 inline-flex items-center gap-1 bg-raised border border-line rounded-full px-2.5 py-1 text-xs font-bold"
+                >
+                  {format(d, 'EEE, MMM d')}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${format(d, 'MMM d')}`}
+                    onClick={() =>
+                      setSelectedDates((prev) => prev.filter((x) => x.toDateString() !== d.toDateString()))
+                    }
+                    className="text-ink-muted hover:text-danger"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+          </div>
+        )}
+        <p className="mt-1 text-xs text-ink-muted">
+          {selectedDates.length} selected
+          {selectedDates.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedDates([])
+                setRangeDraft(undefined)
+              }}
+              className="ml-3 text-ink-muted hover:text-ink underline"
+            >
+              Clear all
+            </button>
+          )}
+        </p>
         {pickMode === 'range' && (
           <p className="text-xs text-ink-muted">
             Tap a start date, then an end date — the whole span is added to your selection.

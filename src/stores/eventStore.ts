@@ -1,12 +1,11 @@
 import { create } from 'zustand'
-import { subscribeToEvent, joinWithNameRemote, type EventDoc } from '@/services/eventService'
+import { subscribeToEvent, type EventDoc } from '@/services/eventService'
 import {
   subscribeToParticipants,
   getOrCreateParticipant,
   updateAvailability,
   type ParticipantDoc,
 } from '@/services/participantService'
-import { rememberParticipant } from '@/lib/participantId'
 
 interface EventState {
   slug: string | null
@@ -20,8 +19,7 @@ interface EventState {
   _participantsUnsub: (() => void) | null
 
   loadEvent: (slug: string) => void
-  rejoinStored: (name: string, uid: string) => Promise<void>
-  join: (input: { name?: string; passcode?: string; claimParticipantId?: string }) => Promise<void>
+  joinAs: (name: string, uid: string) => Promise<void>
   updateMyAvailability: (availability: string) => Promise<void>
   reset: () => void
 }
@@ -72,29 +70,11 @@ export const useEventStore = create<EventState>((set, get) => ({
     set({ _eventUnsub: eventUnsub, _participantsUnsub: participantsUnsub })
   },
 
-  rejoinStored: async (name, uid) => {
+  joinAs: async (name, uid) => {
     const state = get()
-    if (!state.slug) throw new Error('rejoinStored called before loadEvent')
+    if (!state.slug) throw new Error('joinAs called before loadEvent')
     const participant = await getOrCreateParticipant(state.slug, name, uid)
     set({ myParticipant: participant })
-  },
-
-  join: async (input) => {
-    const state = get()
-    if (!state.slug) throw new Error('join called before loadEvent')
-    const { participantId, name } = await joinWithNameRemote({ slug: state.slug, ...input })
-    rememberParticipant(state.slug, name, participantId)
-    const fromList = get().participants.find((p) => p.participantId === participantId)
-    set({
-      myParticipant:
-        fromList ?? {
-          participantId,
-          name,
-          uid: '',
-          availability: '',
-          lastUpdated: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 },
-        },
-    })
   },
 
   updateMyAvailability: async (availability) => {

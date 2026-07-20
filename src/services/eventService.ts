@@ -1,17 +1,5 @@
 import { httpsCallable, getFunctions, connectFunctionsEmulator, type Functions } from 'firebase/functions'
-import {
-  doc,
-  onSnapshot,
-  setDoc,
-  serverTimestamp,
-  getDoc,
-  getDocs,
-  query,
-  collection,
-  where,
-  getCountFromServer,
-  type Unsubscribe,
-} from 'firebase/firestore'
+import { doc, onSnapshot, setDoc, serverTimestamp, type Unsubscribe } from 'firebase/firestore'
 import { app, db } from '@/services/firebase'
 
 let functionsInstance: Functions | null = null
@@ -119,71 +107,4 @@ export async function touchLastVisited(
   } catch {
     // best-effort — GC falls back to createdAt
   }
-}
-
-/** One-shot fetch (join-by-code validation). Null when the event doesn't exist. */
-export async function getEvent(slug: string): Promise<EventDoc | null> {
-  const snap = await getDoc(doc(db, 'events', slug))
-  return snap.exists() ? (snap.data() as EventDoc) : null
-}
-
-export interface MyEvent extends EventDoc {
-  slug: string
-}
-
-/** Events created by this uid, newest first. Single-field where — no composite index. */
-export async function listMyEvents(uid: string): Promise<MyEvent[]> {
-  const snap = await getDocs(query(collection(db, 'events'), where('ownerUid', '==', uid)))
-  return snap.docs
-    .map((d) => ({ slug: d.id, ...(d.data() as EventDoc) }))
-    .sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0))
-}
-
-/** Server-side aggregate counts — no participant documents are downloaded. */
-export async function countParticipants(
-  slug: string,
-): Promise<{ joined: number; painted: number | null }> {
-  const col = collection(db, 'events', slug, 'participants')
-  const joinedSnap = await getCountFromServer(col)
-  let painted: number | null = null
-  try {
-    const paintedSnap = await getCountFromServer(query(col, where('availability', '!=', '')))
-    painted = paintedSnap.data().count
-  } catch {
-    painted = null // != aggregate can fail without an index — hide the figure instead
-  }
-  return { joined: joinedSnap.data().count, painted }
-}
-
-/** Owner-only, enforced server-side by the deleteEvent callable. */
-export async function deleteEventRemote(slug: string): Promise<void> {
-  const callable = httpsCallable<{ slug: string }, { ok: boolean }>(
-    getFunctionsClient(),
-    'deleteEvent',
-  )
-  await callable({ slug })
-}
-
-export interface JoinInput {
-  slug: string
-  name?: string
-  passcode?: string
-  claimParticipantId?: string
-}
-
-/** Server-authoritative join/claim (see functions/src/joinWithName.ts). */
-export async function joinWithNameRemote(
-  input: JoinInput,
-): Promise<{ participantId: string; name: string }> {
-  const callable = httpsCallable<JoinInput, { participantId: string; name: string }>(
-    getFunctionsClient(),
-    'joinWithName',
-  )
-  // The callable encoder serializes undefined values as null; drop absent
-  // fields entirely so the server sees a clean payload.
-  const payload = Object.fromEntries(
-    Object.entries(input).filter(([, v]) => v !== undefined),
-  ) as JoinInput
-  const result = await callable(payload)
-  return result.data
 }

@@ -83,10 +83,3 @@ export function getOrCreateParticipantId(slug: string, name: string): string {
   saveParticipantsForEvent(slug, map)
   return id
 }
-
-/** Persist a server-assigned participant identity for this device. */
-export function rememberParticipant(slug: string, name: string, id: string): void {
-  const map = loadParticipantsForEvent(slug)
-  map[normalizeName(name)] = { id, rawName: name.trim() }
-  saveParticipantsForEvent(slug, map)
-}
