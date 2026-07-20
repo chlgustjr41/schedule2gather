@@ -48,6 +48,7 @@ export default function CreateEventForm() {
   const [error, setError] = useState<string | null>(null)
 
   const [name, setName] = useState('')
+  const [location, setLocation] = useState('')
   const [startHour, setStartHour] = useState(9)
   const [endHour, setEndHour] = useState(21)
   const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(30)
@@ -146,6 +147,7 @@ export default function CreateEventForm() {
         slotMinutes: datesOnly ? 60 : slotMinutes,
         timezone,
         datesOnly,
+        location: location.trim() || undefined,
       })
       navigate(`/e/${slug}`)
     } catch (err: unknown) {
@@ -249,6 +251,15 @@ export default function CreateEventForm() {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Pizza night, team sync, book club…"
+      />
+
+      <TextField
+        id="event-location"
+        label="📍 Location (optional)"
+        value={location}
+        onChange={(e) => setLocation(e.target.value)}
+        placeholder="Where's it happening? (optional)"
+        maxLength={200}
       />
 
       <Card>

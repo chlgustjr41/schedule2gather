@@ -60,6 +60,7 @@ export const createEvent = onCall(
       timezone: input.timezone,
       slotCount,
       datesOnly: input.datesOnly ?? false,
+      ...(input.location?.trim() ? { location: input.location.trim() } : {}),
     })
 
     return { slug }
@@ -69,3 +70,5 @@ export const createEvent = onCall(
 export { cleanupExpiredEvents } from './cleanupExpiredEvents'
 export { deleteEvent } from './deleteEvent'
 export { joinWithName } from './joinWithName'
+// submitFeedback is deployed separately once GITHUB_TOKEN is provisioned — see PRODUCTION.md.
+// export { submitFeedback } from './submitFeedback'

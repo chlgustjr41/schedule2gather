@@ -124,6 +124,9 @@ export default function EventPage() {
                   {event.dates.length} {event.mode === 'weekdays_recurring' ? 'weekdays' : 'dates'} ·{' '}
                   {event.slotMinutes} min slots
                 </p>
+                {event.location && (
+                  <p className="text-sm text-ink-muted mt-0.5">📍 {event.location}</p>
+                )}
                 {participants.length > 0 && (
                   <div className="flex items-center mt-2">
                     {participants.slice(0, 8).map((p) => (

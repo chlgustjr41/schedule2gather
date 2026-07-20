@@ -34,6 +34,8 @@ export interface CreateEventInput {
   timezone: string
   /** True when the host only wants date-level voting (no hourly grid). */
   datesOnly?: boolean
+  /** Optional venue/address, shown to voters and included in the finalize announcement. */
+  location?: string
 }
 
 export interface CreateEventResult {
@@ -71,6 +73,8 @@ export interface EventDoc {
   lastVisitedAt?: { seconds: number; nanoseconds: number } | null
   /** True when the host only wants date-level voting (no hourly grid). */
   datesOnly?: boolean
+  /** Optional venue/address, shown to voters and included in the finalize announcement. */
+  location?: string
 }
 
 /**
@@ -92,13 +96,25 @@ export async function setOwnerEmail(slug: string, email: string): Promise<void> 
   await setDoc(ref, { ownerEmail: email }, { merge: true })
 }
 
-/** Host-only (enforced by rules): lock the vote to a final window. */
+/**
+ * Host-only (enforced by rules): lock the vote to a final window. Passing
+ * `location` writes/updates it in the same merge — finalizing is the second
+ * of the two points (alongside event creation) where the host can set it.
+ */
 export async function finalizeEvent(
   slug: string,
   window: { startSlot: number; endSlot: number },
+  location?: string,
 ): Promise<void> {
   const ref = doc(db, 'events', slug)
-  await setDoc(ref, { finalized: { ...window, finalizedAt: serverTimestamp() } }, { merge: true })
+  await setDoc(
+    ref,
+    {
+      finalized: { ...window, finalizedAt: serverTimestamp() },
+      ...(location !== undefined ? { location } : {}),
+    },
+    { merge: true },
+  )
 }
 
 /** Host-only (enforced by rules): reopen voting. */
