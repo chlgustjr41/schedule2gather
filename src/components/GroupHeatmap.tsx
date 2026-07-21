@@ -30,13 +30,33 @@ export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
   // busy-marked slot as available, so for exactly those slot indices, on the
   // viewer's own entry only, read the bit translated back to its real meaning.
   const invertedSlotSet = useMemo(() => new Set(notAvailableSlotIndices), [notAvailableSlotIndices])
+
+  // Entering the mode on an already-blank tracked page never writes anything
+  // (see invertCurrentPageIfNeeded's own "nothing to invert" guard), so there
+  // is nothing yet to translate — group overlap should keep showing the
+  // viewer's real (untouched) availability. The moment the viewer paints
+  // their first slot this session, the whole tracked page reveals its
+  // translated (eventual post-exit) meaning at once, matching what exiting
+  // the mode right now would actually commit.
+  const myTrackedPageHasAnyColored = useMemo(() => {
+    if (!notAvailableMode || !myParticipant || !event || invertedSlotSet.size === 0) return false
+    const myBits = unpack(myParticipant.availability, event.slotCount)
+    for (const idx of invertedSlotSet) {
+      if (myBits[idx]) return true
+    }
+    return false
+  }, [notAvailableMode, myParticipant, event, invertedSlotSet])
+
   const bitFor = useCallback(
     (p: { participantId: string; availability: string }, slotIdx: number, bits: boolean[]): boolean => {
       const isMyInvertedSlot =
-        notAvailableMode && myParticipant?.participantId === p.participantId && invertedSlotSet.has(slotIdx)
+        notAvailableMode &&
+        myTrackedPageHasAnyColored &&
+        myParticipant?.participantId === p.participantId &&
+        invertedSlotSet.has(slotIdx)
       return isMyInvertedSlot ? !bits[slotIdx] : bits[slotIdx]
     },
-    [notAvailableMode, myParticipant, invertedSlotSet],
+    [notAvailableMode, myTrackedPageHasAnyColored, myParticipant, invertedSlotSet],
   )
 
   const counts = useMemo(() => {
