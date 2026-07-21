@@ -112,6 +112,10 @@ export default function CreateEventForm() {
   // months are actually on screen as the user pages through the calendar.
   const [displayMonth, setDisplayMonth] = useState<Date>(today)
   const visibleMonths = isMobile ? [displayMonth] : [displayMonth, addMonths(displayMonth, 1)]
+  // Adjacent-month leading/trailing days are shown for context (showOutsideDays
+  // below) but stay unselectable — navigation happens via the Prev/Next
+  // controls, not by tapping into a neighboring month's dates.
+  const isOutsideVisibleMonths = (date: Date) => !visibleMonths.some((m) => isSameMonth(date, m))
   // DayPicker's built-in Nav is suppressed (components.Nav returns null below)
   // in favor of these, rendered on the Pick-days/Date-range toggle's row.
   const canGoPrevMonth = startOfMonth(displayMonth) > startOfMonth(today)
@@ -429,8 +433,9 @@ export default function CreateEventForm() {
               onMonthChange={setDisplayMonth}
               selected={selectedDates}
               onSelect={(dates) => setSelectedDates(dates ?? [])}
-              disabled={{ before: today }}
+              disabled={[{ before: today }, isOutsideVisibleMonths]}
               startMonth={today}
+              showOutsideDays
               showWeekNumber
               components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader, MonthCaption, Nav: () => <></> }}
             />
@@ -458,8 +463,9 @@ export default function CreateEventForm() {
                   setRangeDraft(range)
                 }
               }}
-              disabled={{ before: today }}
+              disabled={[{ before: today }, isOutsideVisibleMonths]}
               startMonth={today}
+              showOutsideDays
               showWeekNumber
               components={{ WeekNumber: WeekNumberCell, Weekday: WeekdayHeader, MonthCaption, Nav: () => <></> }}
             />
