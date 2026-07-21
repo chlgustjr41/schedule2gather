@@ -345,6 +345,24 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     await writeAvailability(next)
   }
 
+  // Timed-grid "Mark all"/"Clear all": scoped to whatever's actually on
+  // screen. currentPageSlotIndices() already returns every event date when
+  // the view is "All" (nothing is paginated there), so this only ends up
+  // restricted to the current page while Week/Month view is active.
+  const markCurrentPagePainted = async () => {
+    if (!myCommittedBits) return
+    const next = [...myCommittedBits]
+    for (const idx of currentPageSlotIndices()) next[idx] = true
+    await writeAvailability(next)
+  }
+
+  const clearCurrentPagePainted = async () => {
+    if (!myCommittedBits) return
+    const next = [...myCommittedBits]
+    for (const idx of currentPageSlotIndices()) next[idx] = false
+    await writeAvailability(next)
+  }
+
   // Inverts the current page's slots and commits — but only if at least one
   // of them is currently colored. An all-blank page has nothing meaningful
   // to invert, so it's left blank rather than lighting up entirely.
@@ -757,7 +775,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           variant="secondary"
           size="sm"
           type="button"
-          onClick={() => void markAllPainted()}
+          onClick={() => void markCurrentPagePainted()}
         >
           Mark all
         </Button>
@@ -765,7 +783,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           variant="secondary"
           size="sm"
           type="button"
-          onClick={() => void clearAllPainted()}
+          onClick={() => void clearCurrentPagePainted()}
         >
           Clear all
         </Button>
