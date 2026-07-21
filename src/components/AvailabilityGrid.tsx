@@ -51,6 +51,8 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   const draftBits = usePaintStore((s) => s.draftBits)
   const paintMode = usePaintStore((s) => s.paintMode)
   const setPaintMode = usePaintStore((s) => s.setPaintMode)
+  const notAvailableMode = usePaintStore((s) => s.notAvailableMode)
+  const setNotAvailableModeShared = usePaintStore((s) => s.setNotAvailableMode)
   const [tooltipSlot, setTooltipSlot] = useState<number | null>(null)
   const [undoStack, setUndoStack] = useState<string[]>([])
   const [redoStack, setRedoStack] = useState<string[]>([])
@@ -68,15 +70,6 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   })
   const [eventDaysOnly, setEventDaysOnly] = useState(true)
   const [dateOnlyView, setDateOnlyView] = useState<'all' | 'week' | 'month'>(() => (isMobile ? 'week' : 'all'))
-  // "Not available" paint mode: while on, painting marks busy times (shown in
-  // the danger color instead of the mine color) rather than free ones. Every
-  // toggle of this mode (on or off) inverts the CURRENT PAGE's real bits —
-  // see invertCurrentPageIfNeeded — but only if the page actually has
-  // anything colored; an all-blank page has nothing to invert and stays
-  // blank. Because the underlying data itself is what's inverted (not just
-  // the rendering), individual clicks during the session need no special
-  // handling — each one only ever touches the one cell it's applied to.
-  const [notAvailableMode, setNotAvailableMode] = useState(false)
 
   const changeZoom = (dir: 1 | -1) =>
     setZoom((z) => {
@@ -342,7 +335,8 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   }
 
   const toggleNotAvailableMode = async () => {
-    setNotAvailableMode((v) => !v)
+    const next = !notAvailableMode
+    setNotAvailableModeShared(next, next ? currentPageSlotIndices() : [])
     await invertCurrentPageIfNeeded()
   }
 
@@ -351,7 +345,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   // navigation as an implicit exit so it's always correctly inverted back.
   const exitNotAvailableModeForNavigation = async () => {
     if (!notAvailableMode) return
-    setNotAvailableMode(false)
+    setNotAvailableModeShared(false, [])
     await invertCurrentPageIfNeeded()
   }
 

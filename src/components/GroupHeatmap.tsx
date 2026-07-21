@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useEventStore } from '@/stores/eventStore'
+import { usePaintStore } from '@/stores/paintStore'
 import { unpack } from '@/lib/bitmap'
 import { slotsPerDay } from '@/lib/slots'
 import { heatColor } from '@/lib/heatColor'
@@ -17,7 +18,26 @@ interface GroupHeatmapProps {
 export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
   const event = useEventStore((s) => s.event)
   const participants = useEventStore((s) => s.participants)
+  const myParticipant = useEventStore((s) => s.myParticipant)
+  const notAvailableMode = usePaintStore((s) => s.notAvailableMode)
+  const notAvailableSlotIndices = usePaintStore((s) => s.notAvailableSlotIndices)
   const [tip, setTip] = useState<number | null>(null)
+
+  // While the viewer's own "not available" mode is on, their AvailabilityGrid
+  // has the current page's real bits toggle-inverted (busy shows as bit=true)
+  // until they turn the mode back off — see AvailabilityGrid's
+  // invertCurrentPageIfNeeded. Reading that raw bit here would misreport a
+  // busy-marked slot as available, so for exactly those slot indices, on the
+  // viewer's own entry only, read the bit translated back to its real meaning.
+  const invertedSlotSet = useMemo(() => new Set(notAvailableSlotIndices), [notAvailableSlotIndices])
+  const bitFor = useCallback(
+    (p: { participantId: string; availability: string }, slotIdx: number, bits: boolean[]): boolean => {
+      const isMyInvertedSlot =
+        notAvailableMode && myParticipant?.participantId === p.participantId && invertedSlotSet.has(slotIdx)
+      return isMyInvertedSlot ? !bits[slotIdx] : bits[slotIdx]
+    },
+    [notAvailableMode, myParticipant, invertedSlotSet],
+  )
 
   const counts = useMemo(() => {
     if (!event) return []
@@ -26,11 +46,11 @@ export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
       if (p.availability === '') continue
       const bits = unpack(p.availability, event.slotCount)
       for (let i = 0; i < event.slotCount; i++) {
-        if (bits[i]) c[i] += 1
+        if (bitFor(p, i, bits)) c[i] += 1
       }
     }
     return c
-  }, [event, participants])
+  }, [event, participants, bitFor])
 
   if (!event) return null
   const spd = slotsPerDay(event.timeRange, event.slotMinutes)
@@ -38,7 +58,11 @@ export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
 
   const tipText = (slotIdx: number) => {
     const names = participants
-      .filter((p) => p.availability !== '' && unpack(p.availability, event.slotCount)[slotIdx])
+      .filter((p) => {
+        if (p.availability === '') return false
+        const bits = unpack(p.availability, event.slotCount)
+        return bitFor(p, slotIdx, bits)
+      })
       .map((p) => p.name)
     const time = formatSlotTimeLabel(event, slotIdx, viewerTimezone)
     return `${time} · ${names.length === 0 ? 'no one yet' : names.join(', ')} · ${names.length}/${total}`
