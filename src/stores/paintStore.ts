@@ -7,11 +7,25 @@ interface PaintState {
   /** "on" means the drag is filling cells true; "off" means clearing. Null when not painting. */
   mode: 'on' | 'off' | null
   paintMode: boolean
+  /**
+   * The viewer's own availability, already translated for Group overlap's
+   * purposes — or null when no translation is needed (raw committed data is
+   * fine as-is). AvailabilityGrid computes this SYNCHRONOUSLY, from purely
+   * local values, every time it writes availability while "not available"
+   * mode is involved, and pushes the finished array here in the same tick as
+   * the write. GroupHeatmap just reads it — it never derives a translation
+   * itself from the mode flag plus the (separately, asynchronously arriving)
+   * committed data, which is what caused a real one-frame flicker: those two
+   * signals don't always land in the same React commit, so briefly reading
+   * one new + one stale produced a fully-inverted-from-correct frame.
+   */
+  myOverlapOverride: boolean[] | null
 
   startPaint: (slotIdx: number, currentBits: boolean[]) => void
   dragTo: (slotIdx: number, currentBits: boolean[]) => void
   commitPaint: () => boolean[] | null
   setPaintMode: (on: boolean) => void
+  setMyOverlapOverride: (bits: boolean[] | null) => void
 }
 
 export const usePaintStore = create<PaintState>((set, get) => ({
@@ -59,5 +73,10 @@ export const usePaintStore = create<PaintState>((set, get) => ({
 
   setPaintMode: (on) => {
     set({ paintMode: on })
+  },
+
+  myOverlapOverride: null,
+  setMyOverlapOverride: (bits) => {
+    set({ myOverlapOverride: bits })
   },
 }))

@@ -4,7 +4,7 @@ import { useEventStore } from '@/stores/eventStore'
 import { usePaintStore } from '@/stores/paintStore'
 import { pack, unpack } from '@/lib/bitmap'
 import { slotsPerDay } from '@/lib/slots'
-import { formatSlotDateLabel, formatSlotTimeLabel } from '@/lib/timezoneSlots'
+import { formatSlotDateLabel, formatSlotDateParts, formatSlotTimeLabel } from '@/lib/timezoneSlots'
 import { getMonthPages, getVisibleColumns, getWeekPages, type CalendarColumn } from '@/lib/calendarPages'
 import CellTooltip from '@/components/CellTooltip'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -51,6 +51,8 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   const draftBits = usePaintStore((s) => s.draftBits)
   const paintMode = usePaintStore((s) => s.paintMode)
   const setPaintMode = usePaintStore((s) => s.setPaintMode)
+  const setMyOverlapOverride = usePaintStore((s) => s.setMyOverlapOverride)
+  const [notAvailableMode, setNotAvailableMode] = useState(false)
   const [tooltipSlot, setTooltipSlot] = useState<number | null>(null)
   const [undoStack, setUndoStack] = useState<string[]>([])
   const [redoStack, setRedoStack] = useState<string[]>([])
@@ -259,6 +261,46 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
 
   const myDisplayBits = draftBits ?? myCommittedBits
 
+  // Slot indices belonging to the CURRENTLY VISIBLE page only (real event
+  // dates, not the greyed out-of-range columns) — inverting on toggle, and
+  // the Group overlap translation, both only ever touch what's on screen.
+  const currentPageSlotIndices = (): number[] =>
+    visibleColumns
+      .filter((c) => c.eventDateIdx !== -1)
+      .flatMap((c) => {
+        const start = c.eventDateIdx * spd
+        return Array.from({ length: spd }, (_, i) => start + i)
+      })
+
+  // Exactly what Group overlap should show for the viewer's own row right
+  // now: translated if "not available" mode is active AND the tracked page
+  // has been colored, otherwise identical to the real values themselves. A
+  // pure, synchronous function of purely local values.
+  const computeOverlapView = (bits: boolean[], modeOn: boolean, trackedIdxs: number[]): boolean[] => {
+    if (!modeOn) return bits
+    const hasAnyColored = trackedIdxs.some((idx) => bits[idx])
+    if (!hasAnyColored) return bits
+    const tracked = new Set(trackedIdxs)
+    return bits.map((b, i) => (tracked.has(i) ? !b : b))
+  }
+
+  // Writes availability while keeping Group overlap glitch-free: the override
+  // is set to the exact correct view BEFORE the write starts. Group overlap
+  // is never caught reading one signal (the mode flag) that's already new
+  // alongside another (the committed data) that's still stale — which is
+  // what caused a real, confirmed one-frame flicker. The override is only
+  // cleared once the mode is off going forward — raw data needs no further
+  // translation at that point. While the mode stays on, clearing it early
+  // would make Group overlap fall back to reading the still-inverted raw
+  // data directly, which is wrong for as long as the mode remains open.
+  const writeAvailability = async (next: boolean[], modeOnAfter: boolean = notAvailableMode) => {
+    const trackedIdxs = modeOnAfter ? currentPageSlotIndices() : []
+    setMyOverlapOverride(computeOverlapView(next, modeOnAfter, trackedIdxs))
+    pushHistory(myParticipant?.availability ?? '')
+    await updateMyAvailability(pack(next))
+    if (!modeOnAfter) setMyOverlapOverride(null)
+  }
+
   const toggleColumn = async (dateIdx: number) => {
     if (!myCommittedBits) return
     const startIdx = dateIdx * spd
@@ -273,8 +315,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     const value = anyOff
     const next = [...myCommittedBits]
     for (let i = startIdx; i <= endIdx; i++) next[i] = value
-    pushHistory(myParticipant?.availability ?? '')
-    await updateMyAvailability(pack(next))
+    await writeAvailability(next)
   }
 
   const toggleRow = async (timeIdx: number) => {
@@ -289,22 +330,68 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
     const value = anyOff
     const next = [...myCommittedBits]
     for (let d = 0; d < event.dates.length; d++) next[d * spd + timeIdx] = value
-    pushHistory(myParticipant?.availability ?? '')
-    await updateMyAvailability(pack(next))
+    await writeAvailability(next)
   }
 
-  const setAllAvailable = async () => {
+  const markAllPainted = async () => {
     if (!event || !myCommittedBits) return
     const next = new Array(event.slotCount).fill(true)
-    pushHistory(myParticipant?.availability ?? '')
-    await updateMyAvailability(pack(next))
+    await writeAvailability(next)
   }
 
-  const setAllUnavailable = async () => {
+  const clearAllPainted = async () => {
     if (!event || !myCommittedBits) return
     const next = new Array(event.slotCount).fill(false)
-    pushHistory(myParticipant?.availability ?? '')
-    await updateMyAvailability(pack(next))
+    await writeAvailability(next)
+  }
+
+  // Timed-grid "Mark all"/"Clear all": scoped to whatever's actually on
+  // screen. currentPageSlotIndices() already returns every event date when
+  // the view is "All" (nothing is paginated there), so this only ends up
+  // restricted to the current page while Week/Month view is active.
+  const markCurrentPagePainted = async () => {
+    if (!myCommittedBits) return
+    const next = [...myCommittedBits]
+    for (const idx of currentPageSlotIndices()) next[idx] = true
+    await writeAvailability(next)
+  }
+
+  const clearCurrentPagePainted = async () => {
+    if (!myCommittedBits) return
+    const next = [...myCommittedBits]
+    for (const idx of currentPageSlotIndices()) next[idx] = false
+    await writeAvailability(next)
+  }
+
+  // Inverts the current page's slots and commits — but only if at least one
+  // of them is currently colored. An all-blank page has nothing meaningful
+  // to invert, so it's left blank rather than lighting up entirely.
+  const invertCurrentPageIfNeeded = async (modeAfter: boolean) => {
+    if (!myCommittedBits) return
+    const pageSlotIdxs = currentPageSlotIndices()
+    const hasAnyColored = pageSlotIdxs.some((idx) => myCommittedBits[idx])
+    if (!hasAnyColored) {
+      setMyOverlapOverride(null)
+      return
+    }
+    const next = [...myCommittedBits]
+    for (const idx of pageSlotIdxs) next[idx] = !next[idx]
+    await writeAvailability(next, modeAfter)
+  }
+
+  const toggleNotAvailableMode = async () => {
+    const next = !notAvailableMode
+    setNotAvailableMode(next)
+    await invertCurrentPageIfNeeded(next)
+  }
+
+  // Leaving the page while the mode is on would otherwise leave data on the
+  // page you're navigating away from sitting in "busy" semantics — treat
+  // navigation as an implicit exit so it's always correctly inverted back.
+  const exitNotAvailableModeForNavigation = async () => {
+    if (!notAvailableMode) return
+    setNotAvailableMode(false)
+    await invertCurrentPageIfNeeded(false)
   }
 
   const triggerHaptic = () => {
@@ -356,8 +443,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
   const handlePointerUp = async () => {
     const finalBits = commitPaint()
     if (finalBits) {
-      pushHistory(myParticipant?.availability ?? '')
-      await updateMyAvailability(pack(finalBits))
+      await writeAvailability(finalBits)
     }
   }
 
@@ -369,10 +455,9 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
 
   const toggleSingleSlot = async (slotIdx: number) => {
     if (!myCommittedBits) return
-    pushHistory(myParticipant?.availability ?? '')
     const next = [...myCommittedBits]
     next[slotIdx] = !next[slotIdx]
-    await updateMyAvailability(pack(next))
+    await writeAvailability(next)
   }
 
   const handleGridKeyDown = (e: React.KeyboardEvent<HTMLTableElement>) => {
@@ -451,7 +536,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
       <thead>
         <tr role="row">
           <th
-            className={`w-16 ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
+            className={`w-20 ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
             aria-hidden="true"
           ></th>
           {visibleColumns.map((col) => {
@@ -461,24 +546,31 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                   key={col.dateStr}
                   role="columnheader"
                   scope="col"
-                  className="p-2 text-sm font-medium text-ink-muted/50 select-none"
+                  className="w-28 p-2 text-sm font-medium text-ink-muted/50 select-none whitespace-nowrap"
                 >
-                  {format(col.date, 'EEE d')}
+                  <span className="flex flex-col items-center justify-center w-full select-none leading-tight">
+                    <span>{format(col.date, 'EEE')}</span>
+                    <span className="text-[11px] opacity-80">{format(col.date, 'MMM d')}</span>
+                  </span>
                 </th>
               )
             }
             const dateIdx = col.eventDateIdx
+            const { day, date: dateLabel } = formatSlotDateParts(event, dateIdx, viewerTimezone)
             return (
               <th
                 key={col.dateStr}
                 role="columnheader"
                 scope="col"
                 onClick={interactive ? () => void toggleColumn(dateIdx) : undefined}
-                className={`p-2 text-sm font-medium select-none ${interactive ? 'cursor-pointer hover:bg-raised' : ''}`}
+                className={`w-28 p-2 text-sm font-medium select-none whitespace-nowrap ${interactive ? 'cursor-pointer hover:bg-raised' : ''}`}
                 title={interactive ? 'Click to toggle this entire column' : undefined}
               >
-                <span className={interactive ? 'inline-block bg-raised border border-line rounded-[8px] px-1.5 py-0.5 active:bg-primary/20 select-none' : undefined}>
-                  {formatSlotDateLabel(event, dateIdx, viewerTimezone)}
+                <span
+                  className={`flex flex-col items-center justify-center w-full select-none leading-tight ${interactive ? 'bg-raised border border-line rounded-[8px] px-1.5 py-1 active:bg-primary/20' : ''}`}
+                >
+                  <span>{day}</span>
+                  {dateLabel && <span className="text-[11px] text-ink-muted">{dateLabel}</span>}
                 </span>
               </th>
             )
@@ -492,11 +584,13 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               role="rowheader"
               scope="row"
               onClick={interactive ? () => void toggleRow(timeIdx) : undefined}
-              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-1 align-top select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
+              className={`${LABEL_CLASS[zoom]} text-ink-muted pr-1 align-top whitespace-nowrap select-none ${interactive ? 'cursor-pointer hover:text-ink' : ''} ${stickyTimeColumn ? 'sticky left-0 bg-surface z-10' : ''}`}
               title={interactive ? 'Click to toggle this entire row' : undefined}
             >
               {/* P2 simplification: time label uses dateIdx=0; cross-TZ DST or date-line shifts may cause minor mismatch with later columns. */}
-              <span className={interactive ? 'inline-block bg-raised border border-line rounded-[8px] px-1.5 py-0.5 active:bg-primary/20 select-none' : undefined}>
+              <span
+                className={`flex items-center justify-center w-full select-none ${interactive ? 'bg-raised border border-line rounded-[8px] px-1.5 py-0.5 active:bg-primary/20' : ''}`}
+              >
                 {formatSlotTimeLabel(event, timeIdx, viewerTimezone)}
               </span>
             </td>
@@ -514,7 +608,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
               const dateIdx = col.eventDateIdx
               const slotIdx = dateIdx * spd + timeIdx
               const mine = myDisplayBits[slotIdx]
-              const bg = mineColor(mine)
+              const bg = mineColor(mine, notAvailableMode)
               return (
                 <td
                   key={slotIdx}
@@ -593,7 +687,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                 size="sm"
                 type="button"
                 title="Mark every date as available"
-                onClick={() => void setAllAvailable()}
+                onClick={() => void markAllPainted()}
               >
                 Mark all available
               </Button>
@@ -602,7 +696,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
                 size="sm"
                 type="button"
                 title="Clear every date"
-                onClick={() => void setAllUnavailable()}
+                onClick={() => void clearAllPainted()}
               >
                 Clear all
               </Button>
@@ -672,6 +766,7 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           }
           value={viewSize}
           onChange={(v) => {
+            void exitNotAvailableModeForNavigation()
             setViewSize(v)
             setPageIdx(0)
           }}
@@ -680,17 +775,31 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
           variant="secondary"
           size="sm"
           type="button"
-          onClick={() => void setAllAvailable()}
+          onClick={() => void markCurrentPagePainted()}
         >
-          Mark all available
+          Mark all
         </Button>
         <Button
           variant="secondary"
           size="sm"
           type="button"
-          onClick={() => void setAllUnavailable()}
+          onClick={() => void clearCurrentPagePainted()}
         >
           Clear all
+        </Button>
+        <Button
+          variant={notAvailableMode ? 'danger' : 'secondary'}
+          size="sm"
+          type="button"
+          aria-pressed={notAvailableMode}
+          onClick={() => void toggleNotAvailableMode()}
+          title={
+            notAvailableMode
+              ? 'Now painting busy times — tap to flip back to your real availability'
+              : 'Flips your grid to paint busy times instead of free ones'
+          }
+        >
+          🚫 {notAvailableMode ? 'Done — flip back' : 'Mark unavailable'}
         </Button>
         <div className="flex items-center gap-1 ml-auto">
           <button
@@ -778,7 +887,10 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
             variant="secondary"
             size="sm"
             type="button"
-            onClick={() => setPageIdx((p) => Math.max(0, p - 1))}
+            onClick={() => {
+              void exitNotAvailableModeForNavigation()
+              setPageIdx((p) => Math.max(0, p - 1))
+            }}
             disabled={pageIdx === 0}
             aria-label="Previous date page"
           >
@@ -795,7 +907,10 @@ export default function AvailabilityGrid({ viewerTimezone, readOnly = false }: A
             variant="secondary"
             size="sm"
             type="button"
-            onClick={() => setPageIdx((p) => Math.min(totalPages - 1, p + 1))}
+            onClick={() => {
+              void exitNotAvailableModeForNavigation()
+              setPageIdx((p) => Math.min(totalPages - 1, p + 1))
+            }}
             disabled={pageIdx >= totalPages - 1}
             aria-label="Next date page"
           >

@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useEventStore } from '@/stores/eventStore'
+import { usePaintStore } from '@/stores/paintStore'
 import { unpack } from '@/lib/bitmap'
 import { slotsPerDay } from '@/lib/slots'
 import { heatColor } from '@/lib/heatColor'
@@ -17,7 +18,26 @@ interface GroupHeatmapProps {
 export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
   const event = useEventStore((s) => s.event)
   const participants = useEventStore((s) => s.participants)
+  const myParticipant = useEventStore((s) => s.myParticipant)
+  const myOverlapOverride = usePaintStore((s) => s.myOverlapOverride)
   const [tip, setTip] = useState<number | null>(null)
+
+  // AvailabilityGrid pushes myOverlapOverride synchronously, already fully
+  // translated, whenever the viewer's own "not available" mode affects how
+  // their availability should read here — see writeAvailability there. Using
+  // it directly (rather than independently deriving a translation from the
+  // mode flag plus the separately-arriving committed data) is what keeps
+  // this glitch-free: there is only ever one signal to read, never two that
+  // could momentarily disagree.
+  const bitFor = useCallback(
+    (p: { participantId: string; availability: string }, slotIdx: number, bits: boolean[]): boolean => {
+      if (myOverlapOverride && myParticipant?.participantId === p.participantId) {
+        return myOverlapOverride[slotIdx] ?? bits[slotIdx]
+      }
+      return bits[slotIdx]
+    },
+    [myOverlapOverride, myParticipant],
+  )
 
   const counts = useMemo(() => {
     if (!event) return []
@@ -26,11 +46,11 @@ export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
       if (p.availability === '') continue
       const bits = unpack(p.availability, event.slotCount)
       for (let i = 0; i < event.slotCount; i++) {
-        if (bits[i]) c[i] += 1
+        if (bitFor(p, i, bits)) c[i] += 1
       }
     }
     return c
-  }, [event, participants])
+  }, [event, participants, bitFor])
 
   if (!event) return null
   const spd = slotsPerDay(event.timeRange, event.slotMinutes)
@@ -38,7 +58,11 @@ export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
 
   const tipText = (slotIdx: number) => {
     const names = participants
-      .filter((p) => p.availability !== '' && unpack(p.availability, event.slotCount)[slotIdx])
+      .filter((p) => {
+        if (p.availability === '') return false
+        const bits = unpack(p.availability, event.slotCount)
+        return bitFor(p, slotIdx, bits)
+      })
       .map((p) => p.name)
     const time = formatSlotTimeLabel(event, slotIdx, viewerTimezone)
     return `${time} · ${names.length === 0 ? 'no one yet' : names.join(', ')} · ${names.length}/${total}`

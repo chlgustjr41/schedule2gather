@@ -182,7 +182,6 @@ export default function EventPage() {
             ) : (
               <BestTimesPanel viewerTimezone={viewerTimezone} shareUrl={shareUrl} isHost={isHost} slug={slug!} />
             )}
-            <GroupHeatmap viewerTimezone={viewerTimezone} />
             {myParticipant && (
               <Card className="max-w-5xl mx-auto mb-4 border-l-4 border-l-primary">
                 <div className="text-[10px] font-extrabold uppercase tracking-widest text-ink-muted">
@@ -194,6 +193,7 @@ export default function EventPage() {
                 <AvailabilityGrid viewerTimezone={viewerTimezone} readOnly={finalized !== null} />
               </Card>
             )}
+            <GroupHeatmap viewerTimezone={viewerTimezone} />
             {slug && (
               <CommentsPanel
                 slug={slug}

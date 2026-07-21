@@ -64,6 +64,37 @@ export function formatSlotDateLabel(
   }
 }
 
+/** Same date, split into weekday and month/day — for two-line column headers. */
+export function formatSlotDateParts(
+  event: EventForLabels,
+  dateIdx: number,
+  viewerTz: string,
+): { day: string; date: string } {
+  if (event.mode === 'weekdays_recurring') {
+    const w = event.dates[dateIdx]
+    return { day: WEEKDAY_TITLES[w] ?? w ?? '', date: '' }
+  }
+  const spd = slotsPerDay(event)
+  const moment = slotMomentInUTC(event, dateIdx * spd)
+  if (!moment) return { day: event.dates[dateIdx] ?? '', date: '' }
+  try {
+    return {
+      day: formatInTimeZone(moment, viewerTz, 'EEE'),
+      date: formatInTimeZone(moment, viewerTz, 'MMM d'),
+    }
+  } catch {
+    return { day: event.dates[dateIdx] ?? '', date: '' }
+  }
+}
+
+/** 12-hour clock with AM/PM, e.g. "9:15 AM" — `hour24` may be >23 (wraps). */
+function formatHourMinute12(hour24: number, minute: number): string {
+  const norm = ((hour24 % 24) + 24) % 24
+  const suffix = norm < 12 ? 'AM' : 'PM'
+  const h12 = norm % 12 === 0 ? 12 : norm % 12
+  return `${h12}:${pad(minute)} ${suffix}`
+}
+
 export function formatSlotTimeLabel(
   event: EventForLabels,
   slotIdx: number,
@@ -75,12 +106,12 @@ export function formatSlotTimeLabel(
     const totalMinutes = event.timeRange.start * 60 + timeIdx * event.slotMinutes
     const hour = Math.floor(totalMinutes / 60)
     const minute = totalMinutes % 60
-    return `${pad(hour)}:${pad(minute)}`
+    return formatHourMinute12(hour, minute)
   }
   const moment = slotMomentInUTC(event, slotIdx)
   if (!moment) return ''
   try {
-    return formatInTimeZone(moment, viewerTz, 'HH:mm')
+    return formatInTimeZone(moment, viewerTz, 'h:mm a')
   } catch {
     return ''
   }

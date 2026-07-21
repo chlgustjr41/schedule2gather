@@ -97,7 +97,7 @@ export default function CreateEventForm() {
   const [optionalOpen, setOptionalOpen] = useState(false)
   const [startMinutes, setStartMinutes] = useState(9 * 60)
   const [endMinutes, setEndMinutes] = useState(21 * 60)
-  const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(15)
+  const [slotMinutes, setSlotMinutes] = useState<15 | 30 | 60>(60)
   const detectedTz = useMemo(() => detectTimezone(), [])
   const [timezone, setTimezone] = useState(detectedTz)
   const [selectedDates, setSelectedDates] = useState<Date[]>([])
