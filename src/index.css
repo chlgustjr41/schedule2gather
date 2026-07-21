@@ -93,6 +93,21 @@ body {
   --rdp-accent-background-color: color-mix(in srgb, var(--s2g-primary) 18%, transparent);
 }
 
+/* Adjacent-month leading/trailing days (shown via showOutsideDays, disabled
+   via isOutsideVisibleMonths) — greyed and non-interactive for context only.
+   pointer-events:none is a deliberate belt-and-suspenders alongside the
+   disabled matcher: a date like the 1st of next month can be BOTH an
+   "outside" filler cell in this month's grid AND a fully real, selectable
+   cell in the adjacent month's own grid (two calendars are shown side by
+   side) — the date-based disabled matcher can't tell those two cells apart,
+   but a click should never register on the filler copy either way. */
+:root .rdp-root .rdp-outside .rdp-day_button {
+  color: var(--s2g-ink-muted);
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
 /* v1.5 — week-number cells toggle the whole week; read as clickable. */
 /* Week-row selector cells (render a » glyph, not week numbers). */
 :root .rdp-root .rdp-week_number {
