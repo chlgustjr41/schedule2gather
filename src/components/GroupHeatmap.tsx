@@ -19,44 +19,24 @@ export default function GroupHeatmap({ viewerTimezone }: GroupHeatmapProps) {
   const event = useEventStore((s) => s.event)
   const participants = useEventStore((s) => s.participants)
   const myParticipant = useEventStore((s) => s.myParticipant)
-  const notAvailableMode = usePaintStore((s) => s.notAvailableMode)
-  const notAvailableSlotIndices = usePaintStore((s) => s.notAvailableSlotIndices)
+  const myOverlapOverride = usePaintStore((s) => s.myOverlapOverride)
   const [tip, setTip] = useState<number | null>(null)
 
-  // While the viewer's own "not available" mode is on, their AvailabilityGrid
-  // has the current page's real bits toggle-inverted (busy shows as bit=true)
-  // until they turn the mode back off — see AvailabilityGrid's
-  // invertCurrentPageIfNeeded. Reading that raw bit here would misreport a
-  // busy-marked slot as available, so for exactly those slot indices, on the
-  // viewer's own entry only, read the bit translated back to its real meaning.
-  const invertedSlotSet = useMemo(() => new Set(notAvailableSlotIndices), [notAvailableSlotIndices])
-
-  // Entering the mode on an already-blank tracked page never writes anything
-  // (see invertCurrentPageIfNeeded's own "nothing to invert" guard), so there
-  // is nothing yet to translate — group overlap should keep showing the
-  // viewer's real (untouched) availability. The moment the viewer paints
-  // their first slot this session, the whole tracked page reveals its
-  // translated (eventual post-exit) meaning at once, matching what exiting
-  // the mode right now would actually commit.
-  const myTrackedPageHasAnyColored = useMemo(() => {
-    if (!notAvailableMode || !myParticipant || !event || invertedSlotSet.size === 0) return false
-    const myBits = unpack(myParticipant.availability, event.slotCount)
-    for (const idx of invertedSlotSet) {
-      if (myBits[idx]) return true
-    }
-    return false
-  }, [notAvailableMode, myParticipant, event, invertedSlotSet])
-
+  // AvailabilityGrid pushes myOverlapOverride synchronously, already fully
+  // translated, whenever the viewer's own "not available" mode affects how
+  // their availability should read here — see writeAvailability there. Using
+  // it directly (rather than independently deriving a translation from the
+  // mode flag plus the separately-arriving committed data) is what keeps
+  // this glitch-free: there is only ever one signal to read, never two that
+  // could momentarily disagree.
   const bitFor = useCallback(
     (p: { participantId: string; availability: string }, slotIdx: number, bits: boolean[]): boolean => {
-      const isMyInvertedSlot =
-        notAvailableMode &&
-        myTrackedPageHasAnyColored &&
-        myParticipant?.participantId === p.participantId &&
-        invertedSlotSet.has(slotIdx)
-      return isMyInvertedSlot ? !bits[slotIdx] : bits[slotIdx]
+      if (myOverlapOverride && myParticipant?.participantId === p.participantId) {
+        return myOverlapOverride[slotIdx] ?? bits[slotIdx]
+      }
+      return bits[slotIdx]
     },
-    [notAvailableMode, myTrackedPageHasAnyColored, myParticipant, invertedSlotSet],
+    [myOverlapOverride, myParticipant],
   )
 
   const counts = useMemo(() => {

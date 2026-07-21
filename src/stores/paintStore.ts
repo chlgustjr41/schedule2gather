@@ -8,22 +8,24 @@ interface PaintState {
   mode: 'on' | 'off' | null
   paintMode: boolean
   /**
-   * Whether the viewer's own AvailabilityGrid is currently in "not available"
-   * paint mode, and exactly which slot indices are sitting in the
-   * toggle-inverted state because of it. Shared via this store (rather than
-   * local component state) so GroupHeatmap can translate the viewer's own
-   * bits back to their real meaning for those specific slots — otherwise the
-   * group overlap would misread "marked busy" (bit=true while inverted) as
-   * "available" until the mode is turned back off.
+   * The viewer's own availability, already translated for Group overlap's
+   * purposes — or null when no translation is needed (raw committed data is
+   * fine as-is). AvailabilityGrid computes this SYNCHRONOUSLY, from purely
+   * local values, every time it writes availability while "not available"
+   * mode is involved, and pushes the finished array here in the same tick as
+   * the write. GroupHeatmap just reads it — it never derives a translation
+   * itself from the mode flag plus the (separately, asynchronously arriving)
+   * committed data, which is what caused a real one-frame flicker: those two
+   * signals don't always land in the same React commit, so briefly reading
+   * one new + one stale produced a fully-inverted-from-correct frame.
    */
-  notAvailableMode: boolean
-  notAvailableSlotIndices: number[]
+  myOverlapOverride: boolean[] | null
 
   startPaint: (slotIdx: number, currentBits: boolean[]) => void
   dragTo: (slotIdx: number, currentBits: boolean[]) => void
   commitPaint: () => boolean[] | null
   setPaintMode: (on: boolean) => void
-  setNotAvailableMode: (on: boolean, slotIndices: number[]) => void
+  setMyOverlapOverride: (bits: boolean[] | null) => void
 }
 
 export const usePaintStore = create<PaintState>((set, get) => ({
@@ -73,9 +75,8 @@ export const usePaintStore = create<PaintState>((set, get) => ({
     set({ paintMode: on })
   },
 
-  notAvailableMode: false,
-  notAvailableSlotIndices: [],
-  setNotAvailableMode: (on, slotIndices) => {
-    set({ notAvailableMode: on, notAvailableSlotIndices: on ? slotIndices : [] })
+  myOverlapOverride: null,
+  setMyOverlapOverride: (bits) => {
+    set({ myOverlapOverride: bits })
   },
 }))
